@@ -7,6 +7,12 @@ namespace WeightTracker.Api.Services;
 
 public class GoalService(AppDbContext db) : IGoalService
 {
+    public async Task<List<GoalDto>> GetAllAsync()
+    {
+        var goals = await db.Goals.OrderByDescending(g => g.CreatedAt).ToListAsync();
+        return goals.Select(ToDto).ToList();
+    }
+
     public async Task<GoalDto?> GetActiveAsync()
     {
         var goal = await db.Goals.OrderByDescending(g => g.CreatedAt).FirstOrDefaultAsync();
@@ -24,7 +30,7 @@ public class GoalService(AppDbContext db) : IGoalService
         var goal = new Goal
         {
             TargetWeightKg = dto.TargetWeightKg,
-            TargetDate = DateOnly.Parse(dto.TargetDate),
+            TargetDate = dto.TargetDate,
             StartingWeightKg = latestWeight,
             StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
             Notes = dto.Notes,

@@ -11,7 +11,7 @@ export const upsert = (date: string, data: UpsertDailyLogRequest) =>
   client.put<DailyLog>(`/daily-logs/${date}`, data).then((r) => r.data)
 
 export const deleteDay = (date: string) =>
-  client.delete(`/daily-logs/${date}`)
+  client.delete(`/daily-logs/${date}`).then(() => {})
 
 export const deleteWeight = (date: string) =>
   client.delete<DailyLog | null>(`/daily-logs/${date}/weight`).then((r) => r.data)

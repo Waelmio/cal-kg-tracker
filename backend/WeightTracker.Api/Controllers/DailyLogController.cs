@@ -9,50 +9,44 @@ namespace WeightTracker.Api.Controllers;
 public class DailyLogController(IDailyLogService service) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> GetAll(
-        [FromQuery] string? from,
-        [FromQuery] string? to,
+    public async Task<ActionResult<List<DailyLogDto>>> GetAll(
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
         [FromQuery] int? limit)
-    {
-        DateOnly? fromDate = from is not null ? DateOnly.Parse(from) : null;
-        DateOnly? toDate = to is not null ? DateOnly.Parse(to) : null;
-        return Ok(await service.GetAllAsync(fromDate, toDate, limit));
-    }
+        => Ok(await service.GetAllAsync(from, to, limit));
 
     [HttpGet("{date}")]
-    public async Task<IActionResult> GetByDate(string date)
+    public async Task<ActionResult<DailyLogDto>> GetByDate(DateOnly date)
     {
-        var log = await service.GetByDateAsync(DateOnly.Parse(date));
+        var log = await service.GetByDateAsync(date);
         return log is null ? NotFound() : Ok(log);
     }
 
     [HttpPut("{date}")]
-    public async Task<IActionResult> Upsert(string date, [FromBody] UpsertDailyLogDto dto)
+    public async Task<ActionResult<DailyLogDto>> Upsert(DateOnly date, [FromBody] UpsertDailyLogDto dto)
     {
-        // Ensure route date matches body date
-        var normalized = new UpsertDailyLogDto(date, dto.WeightKg, dto.CaloriesKcal, dto.Notes);
+        var normalized = new UpsertDailyLogDto(date.ToString("yyyy-MM-dd"), dto.WeightKg, dto.CaloriesKcal, dto.Notes);
         return Ok(await service.UpsertAsync(normalized));
     }
 
     [HttpDelete("{date}")]
-    public async Task<IActionResult> DeleteDay(string date)
+    public async Task<IActionResult> DeleteDay(DateOnly date)
     {
-        var deleted = await service.DeleteDayAsync(DateOnly.Parse(date));
+        var deleted = await service.DeleteDayAsync(date);
         return deleted ? NoContent() : NotFound();
     }
 
     [HttpDelete("{date}/weight")]
-    public async Task<IActionResult> DeleteWeight(string date)
+    public async Task<ActionResult<DailyLogDto?>> DeleteWeight(DateOnly date)
     {
-        var log = await service.DeleteWeightAsync(DateOnly.Parse(date));
-        // null means row was cleaned up entirely
+        var log = await service.DeleteWeightAsync(date);
         return Ok(log);
     }
 
     [HttpDelete("{date}/calories")]
-    public async Task<IActionResult> DeleteCalories(string date)
+    public async Task<ActionResult<DailyLogDto?>> DeleteCalories(DateOnly date)
     {
-        var log = await service.DeleteCaloriesAsync(DateOnly.Parse(date));
+        var log = await service.DeleteCaloriesAsync(date);
         return Ok(log);
     }
 }

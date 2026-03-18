@@ -145,7 +145,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useSettingsStore } from '../stores/settings'
 import { useCalorieGoalsStore } from '../stores/calorieGoals'
 import { useDailyLogStore } from '../stores/dailyLog'
@@ -155,7 +155,6 @@ import { getISOWeek, getISOWeekYear, getWeekDates } from '../utils/weeks'
 import WeightChart from '../components/dashboard/WeightChart.vue'
 import WeightLogModal from '../components/log/WeightLogModal.vue'
 import CaloriesLogModal from '../components/log/CaloriesLogModal.vue'
-import * as api from '../api/dailyLog'
 
 const settingsStore = useSettingsStore()
 const calorieGoalsStore = useCalorieGoalsStore()
@@ -166,7 +165,7 @@ const today = new Date().toISOString().split('T')[0]
 const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
 const selectedDate = ref(today)
 const calorieTarget = computed(() => calorieGoalsStore.getTargetForDate(selectedDate.value))
-const log = ref<DailyLog | null>(null)
+const log = computed(() => dailyLogStore.logs.find((l) => l.date === selectedDate.value) ?? null)
 
 const activeModal = ref<'weight' | 'calories' | null>(null)
 const modalDate = ref(today)
@@ -176,28 +175,19 @@ function openModal(type: 'weight' | 'calories', date: string) {
   activeModal.value = type
 }
 
-async function loadLog() {
-  try { log.value = await api.getByDate(selectedDate.value) }
-  catch { log.value = null }
-}
-
-watch(selectedDate, loadLog)
-
 async function onSaved() {
-  await Promise.all([dailyLogStore.fetchAll(), loadLog()])
+  await dailyLogStore.fetchAll()
 }
 
 async function confirmRemoveWeight() {
   if (confirm('Remove this weigh-in?')) {
     await dailyLogStore.deleteWeight(selectedDate.value)
-    await loadLog()
   }
 }
 
 async function confirmRemoveCalories() {
   if (confirm('Remove calories for this day?')) {
     await dailyLogStore.deleteCalories(selectedDate.value)
-    await loadLog()
   }
 }
 
@@ -216,6 +206,7 @@ interface MonthGroup { key: string; label: string; weeks: WeekGroup[] }
 
 const grouped = computed<MonthGroup[]>(() => {
   const months = new Map<string, MonthGroup>()
+  const weeks = new Map<string, WeekGroup>()
   for (const entry of dailyLogStore.logs) {
     const d = new Date(entry.date + 'T00:00:00')
     const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
@@ -225,24 +216,19 @@ const grouped = computed<MonthGroup[]>(() => {
     const weekNum = getISOWeek(d)
     const weekYear = getISOWeekYear(d)
     const weekKey = `${weekYear}-W${String(weekNum).padStart(2, '0')}`
-    let week = month.weeks.find((w) => w.key === weekKey)
-    if (!week) {
+    if (!weeks.has(weekKey)) {
       const dates = getWeekDates(weekYear, weekNum)
       const range = `${dayFmt.format(new Date(dates[0] + 'T00:00:00'))} – ${dayFmt.format(new Date(dates[6] + 'T00:00:00'))}`
-      week = { key: weekKey, weekNumber: weekNum, range, logs: [] }
+      const week: WeekGroup = { key: weekKey, weekNumber: weekNum, range, logs: [] }
+      weeks.set(weekKey, week)
       month.weeks.push(week)
     }
-    week.logs.push(entry)
+    weeks.get(weekKey)!.logs.push(entry)
   }
   return [...months.values()]
 })
 
 onMounted(async () => {
-  await Promise.all([
-    settingsStore.fetch(),
-    calorieGoalsStore.fetchAll(),
-    dailyLogStore.fetchAll(),
-    loadLog(),
-  ])
+  await dailyLogStore.fetchAll()
 })
 </script>

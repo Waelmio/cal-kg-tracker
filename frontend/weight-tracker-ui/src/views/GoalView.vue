@@ -374,7 +374,7 @@ async function submit() {
 
 
 onMounted(async () => {
-  await Promise.all([store.fetchActive(), settingsStore.fetch(), calorieGoalsStore.fetchAll(), dashboard.fetch()])
+  await Promise.all([store.fetchActive(), dashboard.fetch()])
   calorieTargetInput.value = calorieGoalsStore.goals[0]?.targetCalories ?? ''
   tdeeInput.value = settingsStore.settings.tdeeKcal ?? ''
 })

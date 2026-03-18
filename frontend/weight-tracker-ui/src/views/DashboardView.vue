@@ -164,7 +164,7 @@ function streakNextLabel(data: DashboardData): string | undefined {
 }
 
 async function onSaved() {
-  await logStore.fetchAll({ limit: 70 })
+  await Promise.all([logStore.fetchAll({ limit: 70 }), dashboard.fetch()])
 }
 
 async function onChartNeedFrom(from: string | null) {
@@ -190,9 +190,7 @@ async function onNeedFrom(from: string) {
 onMounted(async () => {
   await Promise.all([
     dashboard.fetch(),
-    settingsStore.fetch(),
     logStore.fetchAll({ limit: 70 }),
-    calorieGoalsStore.fetchAll(),
   ])
 })
 </script>

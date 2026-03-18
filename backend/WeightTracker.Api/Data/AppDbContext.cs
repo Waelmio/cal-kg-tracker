@@ -16,6 +16,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasIndex(e => e.Date)
             .IsUnique();
 
+        modelBuilder.Entity<Goal>()
+            .HasIndex(e => e.CreatedAt);
+
+        modelBuilder.Entity<CalorieGoal>()
+            .HasIndex(e => e.CreatedAt);
+
         modelBuilder.Entity<UserSettings>()
             .HasData(new UserSettings { Id = 1, PreferredUnit = "kg", HeightCm = null });
     }

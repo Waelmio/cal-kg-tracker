@@ -47,6 +47,7 @@ import {
   Chart as ChartJS, CategoryScale, LinearScale,
   PointElement, LineElement, Tooltip, Filler,
 } from 'chart.js'
+import type { ChartDataset, TooltipItem } from 'chart.js'
 import ZoomPlugin from 'chartjs-plugin-zoom'
 import AnnotationPlugin from 'chartjs-plugin-annotation'
 import type { DailyLog, Goal, WeightUnit } from '../../types'
@@ -180,7 +181,7 @@ const chartData = computed(() => {
     return w != null ? displayWeight(w, props.unit) : null
   })
 
-  const datasets: object[] = [{
+  const datasets: ChartDataset<'line'>[] = [{
     data: weightData,
     borderColor: '#0ea5e9',
     backgroundColor: 'rgba(14,165,233,0.07)',
@@ -286,8 +287,8 @@ const chartOptions = computed(() => ({
     annotation: { annotations: goalAnnotations.value },
     tooltip: {
       callbacks: {
-        label: (ctx: { parsed: { y: number } }) =>
-          `${ctx.parsed.y.toFixed(2)} ${props.unit}`,
+        label: (ctx: TooltipItem<'line'>) =>
+          `${ctx.parsed.y?.toFixed(2) ?? ''} ${props.unit}`,
       },
     },
     zoom: {

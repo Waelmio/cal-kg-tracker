@@ -7,7 +7,11 @@ export const useCalorieGoalsStore = defineStore('calorieGoals', () => {
   const goals = ref<CalorieGoal[]>([])
 
   async function fetchAll() {
-    goals.value = await api.getAll()
+    try {
+      goals.value = await api.getAll()
+    } catch {
+      // keep existing goals on error
+    }
   }
 
   async function create(targetCalories: number) {

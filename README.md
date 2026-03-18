@@ -1,6 +1,6 @@
 # Weight Loss Tracker
 
-A weight loss tracking app with a C# .NET 10 backend and Vue 3 frontend.
+A personal weight loss tracking app with a C# .NET backend and Vue 3 frontend.
 
 ## Stack
 
@@ -9,40 +9,73 @@ A weight loss tracking app with a C# .NET 10 backend and Vue 3 frontend.
 
 ## Running the app
 
-### Backend
+### Docker (recommended)
+
+```bash
+docker compose up --build
+# App at http://localhost:8080
+```
+
+The SQLite database is stored in `./data/weighttracker.db` on the host and persists across restarts. To use a different path:
+
+```bash
+SQL_DB_PATH=/your/path/weighttracker.db docker compose up
+```
+
+### Local development
+
+**Backend**
 
 ```bash
 cd backend/WeightTracker.Api
 dotnet run
-# API runs at http://localhost:5000
-# Swagger UI at http://localhost:5000/swagger
+# API at http://localhost:5118
+# Swagger UI at http://localhost:5118/swagger
 ```
 
-### Frontend
+**Frontend**
 
 ```bash
 cd frontend/weight-tracker-ui
+npm install
 npm run dev
-# App runs at http://localhost:5173
+# App at http://localhost:5173
 ```
-
-## API Endpoints
-
-| Method | Path | Description |
-|---|---|---|
-| GET/POST | `/api/weight-entries` | List / create entries |
-| GET/PUT/DELETE | `/api/weight-entries/{id}` | Get / update / delete entry |
-| GET/POST | `/api/goals` | List / create goals |
-| GET | `/api/goals/active` | Get active goal |
-| GET/PUT/DELETE | `/api/goals/{id}` | Get / update / delete goal |
-| GET | `/api/dashboard` | Aggregated stats |
-| GET/PUT | `/api/settings` | User settings (height, unit) |
 
 ## Features
 
-- Log daily weight entries with optional notes
-- Set weight loss goals with target date and weight
-- Dashboard: current weight, BMI, 7-day trend, goal progress bar
-- Weight history chart (Chart.js line chart)
-- kg / lbs unit toggle (stored internally as kg)
-- SQLite database, auto-migrated on first run
+- Log daily weight and calories independently (one row per day, both fields nullable)
+- Set weight goals — active goal is always the most recent entry
+- Set daily calorie targets — same history pattern as weight goals
+- Dashboard with 7-day weight trend, weekly avg calories, goal progress, and projected goal date
+- TDEE estimation via linear regression on logged weight and calorie data
+- Weight history chart (Chart.js)
+- kg / lbs unit toggle — weight stored internally as kg, converted at display time
+- User settings: height, preferred unit, cached TDEE
+- SQLite database, auto-migrated on startup
+
+## API Endpoints
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/api/daily-logs` | All daily logs |
+| GET/PUT | `/api/daily-logs/{date}` | date = `yyyy-MM-dd` |
+| DELETE | `/api/daily-logs/{date}` | Delete entire day |
+| DELETE | `/api/daily-logs/{date}/weight` | Null weight only |
+| DELETE | `/api/daily-logs/{date}/calories` | Null calories only |
+| GET/POST | `/api/goals` | Goal history |
+| GET | `/api/goals/active` | Most recent goal |
+| DELETE | `/api/goals/{id}` | Delete a goal |
+| GET/POST | `/api/calorie-goals` | Calorie goal history |
+| GET | `/api/calorie-goals/active` | Most recent calorie goal |
+| DELETE | `/api/calorie-goals/{id}` | Delete a calorie goal |
+| GET | `/api/dashboard` | Aggregated stats |
+| GET | `/api/tdee` | TDEE estimate |
+| GET/PUT | `/api/settings` | Height, unit preference |
+
+## Project Structure
+
+```
+backend/WeightTracker.Api/   # .NET Web API
+frontend/weight-tracker-ui/  # Vue 3 SPA
+```

@@ -8,15 +8,19 @@ namespace WeightTracker.Api.Controllers;
 [Route("api/goals")]
 public class GoalsController(IGoalService service) : ControllerBase
 {
+    [HttpGet]
+    public async Task<ActionResult<List<GoalDto>>> GetAll()
+        => Ok(await service.GetAllAsync());
+
     [HttpGet("active")]
-    public async Task<IActionResult> GetActive()
+    public async Task<ActionResult<GoalDto>> GetActive()
     {
         var goal = await service.GetActiveAsync();
         return goal is null ? NotFound() : Ok(goal);
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreateGoalDto dto)
+    public async Task<ActionResult<GoalDto>> Create([FromBody] CreateGoalDto dto)
     {
         var goal = await service.CreateAsync(dto);
         return CreatedAtAction(nameof(GetActive), goal);

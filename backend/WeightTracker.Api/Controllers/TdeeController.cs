@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using WeightTracker.Api.DTOs;
 using WeightTracker.Api.Services;
 
 namespace WeightTracker.Api.Controllers;
@@ -8,7 +9,7 @@ namespace WeightTracker.Api.Controllers;
 public class TdeeController(ITdeeComputationService service) : ControllerBase
 {
     [HttpGet("computed")]
-    public async Task<IActionResult> GetComputed([FromQuery] int days = 90)
+    public async Task<ActionResult<TdeeComputationDto>> GetComputed([FromQuery] int days = 90)
     {
         if (days < 14 || days > 365)
             return BadRequest("days must be between 14 and 365.");
