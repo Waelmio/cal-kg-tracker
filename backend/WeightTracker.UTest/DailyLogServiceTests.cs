@@ -3,7 +3,7 @@ using WeightTracker.Api.Data;
 using WeightTracker.Api.DTOs;
 using WeightTracker.Api.Services;
 
-namespace WeightTracker.Tests;
+namespace WeightTracker.UTest;
 
 public class DailyLogServiceTests
 {

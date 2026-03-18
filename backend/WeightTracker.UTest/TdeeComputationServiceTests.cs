@@ -3,7 +3,7 @@ using WeightTracker.Api.Data;
 using WeightTracker.Api.Models;
 using WeightTracker.Api.Services;
 
-namespace WeightTracker.Tests;
+namespace WeightTracker.UTest;
 
 public class TdeeComputationServiceTests
 {

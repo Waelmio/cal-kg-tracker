@@ -4,7 +4,7 @@ using WeightTracker.Api.DTOs;
 using WeightTracker.Api.Models;
 using WeightTracker.Api.Services;
 
-namespace WeightTracker.Tests;
+namespace WeightTracker.UTest;
 
 public class CalorieGoalServiceTests
 {

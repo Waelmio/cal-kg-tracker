@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/WeightTracker.UTest/">
+    <Project Path="WeightTracker.UTest/WeightTracker.Tests.csproj" />
+  </Folder>
+  <Project Path="WeightTracker.Api/WeightTracker.Api.csproj" />
+</Solution>
