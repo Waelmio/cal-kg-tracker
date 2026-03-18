@@ -9,17 +9,18 @@ namespace WeightTracker.Api.Controllers;
 public class CalorieGoalsController(ICalorieGoalService service) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> GetAll() => Ok(await service.GetAllAsync());
+    public async Task<ActionResult<List<CalorieGoalDto>>> GetAll()
+        => Ok(await service.GetAllAsync());
 
     [HttpGet("active")]
-    public async Task<IActionResult> GetActive()
+    public async Task<ActionResult<CalorieGoalDto>> GetActive()
     {
         var goal = await service.GetActiveAsync();
         return goal is null ? NotFound() : Ok(goal);
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreateCalorieGoalDto dto)
+    public async Task<ActionResult<CalorieGoalDto>> Create([FromBody] CreateCalorieGoalDto dto)
     {
         var goal = await service.CreateAsync(dto);
         return CreatedAtAction(nameof(GetActive), goal);

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using WeightTracker.Api.DTOs;
 using WeightTracker.Api.Services;
 
 namespace WeightTracker.Api.Controllers;
@@ -8,5 +9,5 @@ namespace WeightTracker.Api.Controllers;
 public class DashboardController(IDashboardService service) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> Get() => Ok(await service.GetAsync());
+    public async Task<ActionResult<DashboardDto>> Get() => Ok(await service.GetAsync());
 }

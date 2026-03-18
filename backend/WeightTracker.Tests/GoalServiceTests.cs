@@ -67,7 +67,7 @@ public class GoalServiceTests
         await db.SaveChangesAsync();
         var service = new GoalService(db);
 
-        var result = await service.CreateAsync(new CreateGoalDto(70m, "2025-01-01", null));
+        var result = await service.CreateAsync(new CreateGoalDto(70m, new DateOnly(2025, 1, 1), null));
 
         Assert.Equal(79m, result.StartingWeightKg);
         Assert.Equal(70m, result.TargetWeightKg);
@@ -79,7 +79,7 @@ public class GoalServiceTests
         using var db = CreateDb();
         var service = new GoalService(db);
 
-        var result = await service.CreateAsync(new CreateGoalDto(70m, "2025-01-01", null));
+        var result = await service.CreateAsync(new CreateGoalDto(70m, new DateOnly(2025, 1, 1), null));
 
         Assert.Null(result.StartingWeightKg);
     }
@@ -90,7 +90,7 @@ public class GoalServiceTests
         using var db = CreateDb();
         var service = new GoalService(db);
 
-        await service.CreateAsync(new CreateGoalDto(70m, "2025-01-01", "Lose weight"));
+        await service.CreateAsync(new CreateGoalDto(70m, new DateOnly(2025, 1, 1), "Lose weight"));
 
         Assert.Equal(1, await db.Goals.CountAsync());
         var goal = await db.Goals.FirstAsync();

@@ -9,9 +9,9 @@ namespace WeightTracker.Api.Controllers;
 public class SettingsController(ISettingsService service) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> Get() => Ok(await service.GetAsync());
+    public async Task<ActionResult<UserSettingsDto>> Get() => Ok(await service.GetAsync());
 
     [HttpPut]
-    public async Task<IActionResult> Update([FromBody] UpdateUserSettingsDto dto) =>
+    public async Task<ActionResult<UserSettingsDto>> Update([FromBody] UpdateUserSettingsDto dto) =>
         Ok(await service.UpdateAsync(dto));
 }

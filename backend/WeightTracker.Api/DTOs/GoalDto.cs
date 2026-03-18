@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace WeightTracker.Api.DTOs;
 
 public record GoalDto(
@@ -9,4 +11,7 @@ public record GoalDto(
     string? Notes,
     DateTime CreatedAt);
 
-public record CreateGoalDto(decimal TargetWeightKg, string TargetDate, string? Notes);
+public record CreateGoalDto(
+    [Range(1, 700)] decimal TargetWeightKg,
+    DateOnly TargetDate,
+    [MaxLength(500)] string? Notes);

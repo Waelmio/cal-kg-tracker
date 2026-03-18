@@ -60,7 +60,7 @@ public class DailyLogService(AppDbContext db) : IDailyLogService
         log.WeightKg = null;
         log.UpdatedAt = DateTime.UtcNow;
 
-        if (log.WeightKg is null && log.CaloriesKcal is null)
+        if (log.CaloriesKcal is null)
         {
             db.DailyLogs.Remove(log);
             await db.SaveChangesAsync();
@@ -79,7 +79,7 @@ public class DailyLogService(AppDbContext db) : IDailyLogService
         log.CaloriesKcal = null;
         log.UpdatedAt = DateTime.UtcNow;
 
-        if (log.WeightKg is null && log.CaloriesKcal is null)
+        if (log.WeightKg is null)
         {
             db.DailyLogs.Remove(log);
             await db.SaveChangesAsync();

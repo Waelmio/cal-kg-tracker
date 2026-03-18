@@ -17,14 +17,13 @@ public class DashboardService(AppDbContext db) : IDashboardService
             .OrderByDescending(g => g.CreatedAt)
             .FirstOrDefaultAsync();
 
-        // Today's log
-        var todayLog = await db.DailyLogs.FirstOrDefaultAsync(l => l.Date == today);
-
         // All logs ordered desc for trend calculations
         var logs = await db.DailyLogs
             .Where(l => l.Date <= today)
             .OrderByDescending(l => l.Date)
             .ToListAsync();
+
+        var todayLog = logs.FirstOrDefault(l => l.Date == today);
 
         var latestWeightLog = logs.FirstOrDefault(l => l.WeightKg != null);
         var currentWeight = latestWeightLog?.WeightKg;
@@ -179,7 +178,7 @@ public class DashboardService(AppDbContext db) : IDashboardService
                 // We finished checking the first streak, now calculating what the next streak would be like.
                 else {
                     // If we win caloriesExcessOverStreak calories
-                    avg = avg -= caloriesExcessOverStreak / count;
+                    avg -= (double)caloriesExcessOverStreak / count;
 
                     // Maybe we can win a few more days
                     if (avg < activeCalorieGoal.TargetCalories)

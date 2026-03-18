@@ -11,4 +11,4 @@ export const create = (targetCalories: number) =>
   client.post<CalorieGoal>('/calorie-goals', { targetCalories }).then((r) => r.data)
 
 export const remove = (id: number) =>
-  client.delete(`/calorie-goals/${id}`)
+  client.delete(`/calorie-goals/${id}`).then(() => {})
