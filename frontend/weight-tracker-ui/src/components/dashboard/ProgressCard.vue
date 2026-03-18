@@ -8,7 +8,7 @@
           {{ goal.startingWeightKg != null ? formatWeight(goal.startingWeightKg, unit) : '—' }}
         </span>
         <span class="text-sm font-semibold text-primary-600">
-          {{ progressPercent != null ? `${progressPercent}%` : '' }}
+          {{ currentWeightKg != null ? `${displayWeight(currentWeightKg, unit).toFixed(2)} ${unit}` : (progressPercent != null ? `${progressPercent}%` : '') }}
         </span>
         <span class="text-sm text-gray-500">{{ formatWeight(goal.targetWeightKg, unit) }}</span>
       </div>
@@ -16,10 +16,15 @@
         <div class="h-full bg-primary-500 rounded-full transition-all duration-500"
           :style="{ width: `${progressPercent ?? 0}%` }" />
       </div>
-      <div class="flex justify-between text-xs text-gray-400 mt-1.5">
-        <span v-if="kgToGoal != null">{{ formatWeight(kgToGoal, unit) }} to go</span>
-        <span v-if="projectedDate">On track for {{ new Date(projectedDate).toLocaleDateString('en-GB') }}</span>
-        <span v-else-if="kgToGoal === 0" class="text-emerald-500 font-medium">Goal reached!</span>
+      <div class="flex items-start text-xs mt-1.5">
+        <span class="flex-1 text-gray-400">
+          <template v-if="kgToGoal != null && kgToGoal > 0">{{ formatWeight(kgToGoal, unit) }} to go</template>
+        </span>
+        <span v-if="progressPercent != null" class="text-primary-600 font-medium">{{ progressPercent }}%</span>
+        <span class="flex-1 text-gray-400 text-right">
+          <template v-if="projectedDate">On track for {{ new Date(projectedDate).toLocaleDateString('en-GB') }}</template>
+          <template v-else-if="kgToGoal === 0" class="text-emerald-500 font-medium">Goal reached!</template>
+        </span>
       </div>
     </div>
 
@@ -29,7 +34,7 @@
 
 <script setup lang="ts">
 import type { Goal, WeightUnit } from '../../types'
-import { formatWeight } from '../../utils/units'
+import { formatWeight, displayWeight } from '../../utils/units'
 
 defineProps<{
   goal: Goal | null
@@ -37,5 +42,6 @@ defineProps<{
   kgToGoal: number | null
   projectedDate: string | null
   unit: WeightUnit
+  currentWeightKg: number | null
 }>()
 </script>

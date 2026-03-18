@@ -31,7 +31,7 @@
           :value-class="trendClass(dashboard.data.weightChangeRateKgPerWeek)"
           sub="30-day trend" />
           <StatCard
-          label="Calory Streak"
+          label="🔥 Calory Streak 🔥"
           :value="dashboard.data.calorieStreakDays > 0 ? dashboard.data.calorieStreakDays : null"
           :unit="dashboard.data.calorieStreakDays > 0 ? 'days' : undefined"
           :sub="dashboard.data.calorieStreakDays > 0 ? 'running avg streak' : 'no streak yet'"
@@ -75,7 +75,8 @@
         :progress-percent="dashboard.data.goalProgressPercent"
         :kg-to-goal="dashboard.data.kgToGoal"
         :projected-date="dashboard.data.projectedGoalDate"
-        :unit="unit" />
+        :unit="unit"
+        :current-weight-kg="dashboard.data.avgWeight7Days" />
 
       <WeightChart
         :logs="logStore.logs"

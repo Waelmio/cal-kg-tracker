@@ -103,14 +103,15 @@ public class DashboardService(AppDbContext db) : IDashboardService
         decimal? kgToGoal = null;
         DateOnly? projectedDate = null;
 
-        if (goal is not null && currentWeight.HasValue)
+        var weightForGoalProgress = avgWeight7Days ?? currentWeight;
+        if (goal is not null && weightForGoalProgress.HasValue)
         {
-            kgToGoal = Math.Max(0, currentWeight.Value - goal.TargetWeightKg);
+            kgToGoal = Math.Max(0, weightForGoalProgress.Value - goal.TargetWeightKg);
 
             if (goal.StartingWeightKg.HasValue)
             {
                 var totalToLose = goal.StartingWeightKg.Value - goal.TargetWeightKg;
-                var lost = goal.StartingWeightKg.Value - currentWeight.Value;
+                var lost = goal.StartingWeightKg.Value - weightForGoalProgress.Value;
                 if (totalToLose != 0)
                     progressPercent = Math.Clamp(Math.Round((double)(lost / totalToLose * 100), 1), 0, 100);
             }
