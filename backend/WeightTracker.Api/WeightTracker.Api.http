@@ -1,0 +1,6 @@
+@WeightTracker.Api_HostAddress = http://localhost:5118
+
+GET {{WeightTracker.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
