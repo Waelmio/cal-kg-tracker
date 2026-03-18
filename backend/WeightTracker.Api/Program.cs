@@ -18,6 +18,7 @@ builder.Services.AddScoped<ICalorieGoalService, CalorieGoalService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<ISettingsService, SettingsService>();
 builder.Services.AddScoped<ITdeeComputationService, TdeeComputationService>();
+builder.Services.AddScoped<IDataService, DataService>();
 
 var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? [];
 builder.Services.AddCors(options =>
