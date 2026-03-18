@@ -1,0 +1,7 @@
+**/bin/
+**/obj/
+**/node_modules/
+frontend/weight-tracker-ui/dist/
+**/*.db
+**/*.db-shm
+**/*.db-wal

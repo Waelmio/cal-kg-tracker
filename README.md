@@ -9,7 +9,22 @@ A personal weight loss tracking app with a C# .NET backend and Vue 3 frontend.
 
 ## Running the app
 
-### Backend
+### Docker (recommended)
+
+```bash
+docker compose up --build
+# App at http://localhost:8080
+```
+
+The SQLite database is stored in `./data/weighttracker.db` on the host and persists across restarts. To use a different path:
+
+```bash
+SQL_DB_PATH=/your/path/weighttracker.db docker compose up
+```
+
+### Local development
+
+**Backend**
 
 ```bash
 cd backend/WeightTracker.Api
@@ -18,7 +33,7 @@ dotnet run
 # Swagger UI at http://localhost:5118/swagger
 ```
 
-### Frontend
+**Frontend**
 
 ```bash
 cd frontend/weight-tracker-ui
