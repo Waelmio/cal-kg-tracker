@@ -8,7 +8,7 @@ public class DashboardService(AppDbContext db) : IDashboardService
 {
     public async Task<DashboardDto> GetAsync()
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime);
         var settings = await db.UserSettings.FindAsync(1);
         var goal = await db.Goals.OrderByDescending(g => g.CreatedAt).FirstOrDefaultAsync();
         var todayUtcEnd = today.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);

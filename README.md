@@ -2,25 +2,25 @@
 
 A personal weight loss tracking app with a C# .NET backend and Vue 3 frontend.
 
-## Stack
-
-- **Backend**: .NET 10 Web API · Entity Framework Core · SQLite · Swagger
-- **Frontend**: Vue 3 · TypeScript · Vite · Pinia · Tailwind CSS · Chart.js
-
 ## Running the app
 
 ### Docker (recommended)
+
+#### SQLite
 
 ```bash
 docker compose up --build
 # App at http://localhost:8080
 ```
 
-The SQLite database is stored in `./data/weighttracker.db` on the host and persists across restarts. To use a different path:
+#### PostgreSQL
 
 ```bash
-SQL_DB_PATH=/your/path/weighttracker.db docker compose up
+docker compose -f docker-compose.postgres.yml up --build
+# App at http://localhost:8080
 ```
+
+Database provider is chosen at startup in this order: `DATABASE_URL` → `POSTGRES_HOST` → SQLite.
 
 ### Local development
 
@@ -55,13 +55,21 @@ make test-frontend # Frontend only (Vitest)
 - Weight history chart (Chart.js)
 - kg / lbs unit toggle — weight stored internally as kg, converted at display time
 - User settings: height, preferred unit, cached TDEE
-- SQLite database, auto-migrated on startup
+- SQLite (default) or PostgreSQL — provider chosen via env vars, auto-migrated on startup
 
-## API
+
+## Project Infos
+
+### Stack
+
+- **Backend**: .NET 10 Web API · Entity Framework Core · SQLite / PostgreSQL · Swagger
+- **Frontend**: Vue 3 · TypeScript · Vite · Pinia · Tailwind CSS · Chart.js
+
+### API
 
 See [docs/API.md](docs/API.md) for the full endpoint reference. Swagger UI is also available at `http://localhost:5118/swagger` when running locally.
 
-## Project Structure
+### Project Structure
 
 ```
 backend/WeightTracker.Api/   # .NET Web API

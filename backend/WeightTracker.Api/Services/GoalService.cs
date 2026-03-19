@@ -32,7 +32,7 @@ public class GoalService(AppDbContext db) : IGoalService
             TargetWeightKg = dto.TargetWeightKg,
             TargetDate = dto.TargetDate,
             StartingWeightKg = latestWeight,
-            StartDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            StartDate = DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime),
             Notes = dto.Notes,
         };
 

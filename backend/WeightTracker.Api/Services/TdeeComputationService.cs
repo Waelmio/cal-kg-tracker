@@ -12,7 +12,7 @@ public class TdeeComputationService(AppDbContext db) : ITdeeComputationService
 
     public async Task<TdeeComputationDto?> ComputeAsync(int days)
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime);
         var from = today.AddDays(-days);
 
         var logs = await db.DailyLogs

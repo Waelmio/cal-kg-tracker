@@ -8,5 +8,5 @@ public class Goal
     public decimal? StartingWeightKg { get; set; }
     public DateOnly StartDate { get; set; }
     public string? Notes { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
