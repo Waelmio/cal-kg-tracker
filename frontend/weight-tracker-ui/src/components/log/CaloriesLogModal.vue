@@ -64,7 +64,7 @@ const error = ref('')
 async function loadExisting() {
   try { existing.value = await api.getByDate(date.value) }
   catch { existing.value = null }
-  calories.value = existing.value?.caloriesKcal ?? ''
+  calories.value = existing.value?.caloriesKcal ?? calorieTarget.value ?? ''
 }
 
 watch(date, loadExisting)

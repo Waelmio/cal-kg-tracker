@@ -47,15 +47,22 @@
           label="Weekly Deficit"
           :value="tdeeWeeklyDeficit != null ? `${tdeeWeeklyDeficit > 0 ? '-' : '+'}${Math.abs(tdeeWeeklyDeficit)}` : (dashboard.data.weeklyCalorieDeficit != null ? `${dashboard.data.weeklyCalorieDeficit > 0 ? '-' : '+'}${Math.abs(dashboard.data.weeklyCalorieDeficit)}` : null)"
           :unit="tdeeWeeklyDeficit != null ? 'kcal vs TDEE' : 'kcal vs target'"
-          :value-class="(tdeeWeeklyDeficit ?? dashboard.data.weeklyCalorieDeficit) != null ? ((tdeeWeeklyDeficit ?? dashboard.data.weeklyCalorieDeficit)! >= 0 ? 'text-emerald-500' : 'text-red-500') : ''"
-          :sub-html="tdeeWeeklyDeficit != null && dashboard.data.weeklyCalorieDeficit != null ? `<span class='${dashboard.data.weeklyCalorieDeficit >= 0 ? 'text-emerald-500' : 'text-red-500'}'>${dashboard.data.weeklyCalorieDeficit > 0 ? '-' : '+'}${Math.abs(dashboard.data.weeklyCalorieDeficit)} kcal (${tdeeWeeklyDeficit > 0 ? '-' : '+'}${displayWeight(Math.abs(tdeeWeeklyDeficit) / 7700, unit).toFixed(2)} ${unit})</span> vs target` : undefined" />
-          <StatCard
+          :value-class="deficitClass(tdeeWeeklyDeficit ?? dashboard.data.weeklyCalorieDeficit)"
+          :sub-html="weeklyDeficitSubHtml" />
+          <!-- <StatCard
           label="Est. TDEE"
           :value="dashboard.data.estimatedTdeeKcal"
           unit="kcal"
           sub="Not used in calculations"
           tooltip="Needs 15+ days with both weight and calories logged in the last 30 days"
-          :only-when-empty="true" />
+          :only-when-empty="true" /> -->
+          <StatCard
+          label="Overall Deficit"
+          :value="overallGoalDeficit != null ? `${(overallGoalDeficit.vsTdee ?? overallGoalDeficit.vsTarget) >= 0 ? '-' : '+'}${Math.abs(overallGoalDeficit.vsTdee ?? overallGoalDeficit.vsTarget).toLocaleString()}` : null"
+          :unit="overallGoalDeficit?.vsTdee != null ? 'kcal vs TDEE' : 'kcal vs target'"
+          :value-class="deficitClass(overallGoalDeficit != null ? (overallGoalDeficit.vsTdee ?? overallGoalDeficit.vsTarget) : null)"
+          :sub-html="overallDeficitSubHtml"
+          tooltip="Cumulative calorie deficit since the current goal started" />
         </div>
 
       <CalorieBar
@@ -130,6 +137,48 @@ const tdeeWeeklyDeficit = computed(() => {
   return weeklyCalorieDeficitDays * tdee - weeklySum
 })
 
+const overallGoalDeficit = computed(() => {
+  const goal = dashboard.data?.activeGoal
+  if (!goal) return null
+  const tdee = settingsStore.settings.tdeeKcal
+  const startDate = goal.startDate
+  const logsFromGoal = logStore.logs.filter(l => l.date >= startDate && l.caloriesKcal != null)
+  if (logsFromGoal.length === 0) return null
+  let vsTarget = 0
+  let vsTdee = 0
+  for (const log of logsFromGoal) {
+    const target = calorieGoalsStore.getTargetForDate(log.date)
+    if (target != null) vsTarget += log.caloriesKcal! - target
+    if (tdee != null) vsTdee += log.caloriesKcal! - tdee
+  }
+  // Negate so positive = deficit = good (same convention as weeklyCalorieDeficit)
+  return {
+    vsTarget: Math.round(-vsTarget),
+    vsTdee: tdee != null ? Math.round(-vsTdee) : null,
+  }
+})
+
+const overallDeficitSubHtml = computed(() => {
+  const d = overallGoalDeficit.value
+  if (d == null) return undefined
+  const primary = d.vsTdee ?? d.vsTarget
+  const kgEquiv = displayWeight(Math.abs(primary) / 7700, unit.value).toFixed(2)
+  const kgPart = `≈ <span class='${deficitClass(primary)}'>${kgEquiv} ${unit.value} ${primary >= 0 ? 'loss' : 'gain'}</span>`
+  const targetPart = d.vsTdee != null
+    ? ` or <span class='${deficitClass(d.vsTarget)}'>${d.vsTarget >= 0 ? '-' : '+'}${Math.abs(d.vsTarget).toLocaleString()} kcal</span> vs target`
+    : ''
+  return kgPart + targetPart
+})
+
+const weeklyDeficitSubHtml = computed(() => {
+  const wcd = dashboard.data?.weeklyCalorieDeficit
+  const tdeeD = tdeeWeeklyDeficit.value
+  if (tdeeD == null || wcd == null) return undefined
+  const kgEquiv = displayWeight(Math.abs(tdeeD) / 7700, unit.value).toFixed(2)
+  return `≈ <span class='${deficitClass(tdeeD)}'>${kgEquiv} ${unit.value} ${tdeeD > 0 ? 'loss' : 'gain'}</span>`
+    + ` or <span class='${deficitClass(wcd)}'>${wcd > 0 ? '-' : '+'}${Math.abs(wcd)} kcal</span> vs target`
+})
+
 const calorieAvgClass = computed(() => {
   const avg = dashboard.data?.weeklyAvgCalories
   const target = dashboard.data?.dailyCalorieTarget
@@ -157,6 +206,12 @@ function trendDisplay(trend: number | null): string | null {
 function trendClass(trend: number | null): string {
   if (trend == null) return 'text-gray-800'
   return trend < 0 ? 'text-emerald-500' : 'text-red-500'
+}
+
+// Positive = good (e.g. calorie deficit vs target)
+function deficitClass(n: number | null): string {
+  if (n == null) return ''
+  return n >= 0 ? 'text-emerald-500' : 'text-red-500'
 }
 
 function streakNextLabel(data: DashboardData): string | undefined {
