@@ -250,6 +250,7 @@ function calorieClass(calories: number | null, target: number | null): string {
 </script>
 
 <style scoped>
+@reference "../../style.css";
 .nav-btn {
   @apply text-xl text-gray-400 hover:text-gray-700 w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors shrink-0;
 }

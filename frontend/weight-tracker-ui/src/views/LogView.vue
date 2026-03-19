@@ -15,7 +15,7 @@
         Yesterday
       </button>
       <input v-model="selectedDate" type="date"
-        class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-600 focus:outline-none focus:ring-2 focus:ring-primary-500" />
+        class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-600 focus:outline-hidden focus:ring-2 focus:ring-primary-500" />
     </div>
 
     <div class="grid sm:grid-cols-2 gap-4">
@@ -81,7 +81,7 @@
     <!-- History table -->
     <div class="bg-white rounded-xl border border-gray-200 p-5">
       <div v-if="dailyLogStore.loading" class="space-y-2">
-        <div v-for="i in 8" :key="i" class="h-9 bg-gray-100 animate-pulse rounded" />
+        <div v-for="i in 8" :key="i" class="h-9 bg-gray-100 animate-pulse rounded-sm" />
       </div>
       <div v-else-if="dailyLogStore.logs.length === 0" class="text-gray-400 text-center py-10 text-sm">No entries yet.</div>
       <table v-else class="w-full text-sm">

@@ -4,6 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
+### Root (Makefile)
+```bash
+make dev             # Start backend + frontend in parallel
+make test            # Run all tests in parallel
+make dev-backend     # Backend only
+make dev-frontend    # Frontend only
+make test-backend    # Backend tests only (xUnit, via backend/WeightTracker.slnx)
+make test-frontend   # Frontend tests only (Vitest)
+```
+
 ### Backend (`backend/WeightTracker.Api/`)
 ```bash
 dotnet build
@@ -14,12 +24,11 @@ dotnet-ef migrations remove             # Remove last migration
 
 ### Frontend (`frontend/weight-tracker-ui/`)
 ```bash
-npm run dev      # Dev server at http://localhost:5173
-npm run build    # Type-check + production build
-npm run preview  # Preview production build at http://localhost:4173
+pnpm run dev      # Dev server at http://localhost:5173
+pnpm run build    # Type-check + production build
+pnpm run preview  # Preview production build at http://localhost:4173
+pnpm test         # Run Vitest tests
 ```
-
-There are no tests in this project (neither backend nor frontend test frameworks are configured).
 
 ## Architecture
 
