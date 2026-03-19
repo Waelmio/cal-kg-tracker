@@ -5,7 +5,7 @@ dev-backend:
 	cd backend/WeightTracker.Api && dotnet run
 
 dev-frontend:
-	cd frontend/weight-tracker-ui && npm run dev
+	cd frontend/weight-tracker-ui && pnpm run dev
 
 test:
 	make -j2 test-backend test-frontend
@@ -14,4 +14,4 @@ test-backend:
 	cd backend && dotnet test
 
 test-frontend:
-	cd frontend/weight-tracker-ui && npm test
+	cd frontend/weight-tracker-ui && pnpm test

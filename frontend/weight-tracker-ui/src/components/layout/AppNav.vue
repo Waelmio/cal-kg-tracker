@@ -19,6 +19,7 @@ defineEmits<{ 'open-settings': [] }>()
 </script>
 
 <style scoped>
+@reference "../../style.css";
 .nav-link { @apply text-gray-400 hover:text-gray-900 transition-colors; }
 .nav-link-active { @apply text-primary-600 font-semibold; }
 </style>
