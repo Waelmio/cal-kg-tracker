@@ -2,20 +2,17 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using WeightTracker.Api.Data;
 
 #nullable disable
 
-namespace WeightTracker.Api.Migrations
+namespace WeightTracker.Api.Migrations.Sqlite
 {
-    [DbContext(typeof(AppDbContext))]
-    [Migration("20260317194212_RenameBasalMetabolicRateToTdee")]
-    partial class RenameBasalMetabolicRateToTdee
+    [DbContext(typeof(SqliteDbContext))]
+    partial class SqliteDbContextModelSnapshot : ModelSnapshot
     {
-        /// <inheritdoc />
-        protected override void BuildTargetModel(ModelBuilder modelBuilder)
+        protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.5");
@@ -26,13 +23,16 @@ namespace WeightTracker.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTime>("CreatedAt")
+                    b.Property<string>("CreatedAt")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<int>("TargetCalories")
                         .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
 
                     b.ToTable("CalorieGoals");
                 });
@@ -46,7 +46,8 @@ namespace WeightTracker.Api.Migrations
                     b.Property<int?>("CaloriesKcal")
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTime>("CreatedAt")
+                    b.Property<string>("CreatedAt")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<DateOnly>("Date")
@@ -55,7 +56,8 @@ namespace WeightTracker.Api.Migrations
                     b.Property<string>("Notes")
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTime>("UpdatedAt")
+                    b.Property<string>("UpdatedAt")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<decimal?>("WeightKg")
@@ -75,7 +77,8 @@ namespace WeightTracker.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTime>("CreatedAt")
+                    b.Property<string>("CreatedAt")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Notes")
@@ -94,6 +97,8 @@ namespace WeightTracker.Api.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
 
                     b.ToTable("Goals");
                 });

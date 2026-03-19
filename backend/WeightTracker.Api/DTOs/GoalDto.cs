@@ -9,7 +9,7 @@ public record GoalDto(
     decimal? StartingWeightKg,
     DateOnly StartDate,
     string? Notes,
-    DateTime CreatedAt);
+    DateTimeOffset CreatedAt);
 
 public record CreateGoalDto(
     [Range(1, 700)] decimal TargetWeightKg,

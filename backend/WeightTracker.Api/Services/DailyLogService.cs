@@ -37,7 +37,7 @@ public class DailyLogService(AppDbContext db) : IDailyLogService
         if (dto.WeightKg.HasValue) log.WeightKg = dto.WeightKg;
         if (dto.CaloriesKcal.HasValue) log.CaloriesKcal = dto.CaloriesKcal;
         if (dto.Notes is not null) log.Notes = dto.Notes;
-        log.UpdatedAt = DateTime.UtcNow;
+        log.UpdatedAt = DateTimeOffset.UtcNow;
 
         await db.SaveChangesAsync();
         return ToDto(log);
@@ -58,7 +58,7 @@ public class DailyLogService(AppDbContext db) : IDailyLogService
         if (log is null) return null;
 
         log.WeightKg = null;
-        log.UpdatedAt = DateTime.UtcNow;
+        log.UpdatedAt = DateTimeOffset.UtcNow;
 
         if (log.CaloriesKcal is null)
         {
@@ -77,7 +77,7 @@ public class DailyLogService(AppDbContext db) : IDailyLogService
         if (log is null) return null;
 
         log.CaloriesKcal = null;
-        log.UpdatedAt = DateTime.UtcNow;
+        log.UpdatedAt = DateTimeOffset.UtcNow;
 
         if (log.WeightKg is null)
         {

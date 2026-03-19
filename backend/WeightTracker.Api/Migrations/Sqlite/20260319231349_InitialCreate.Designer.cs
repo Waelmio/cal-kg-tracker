@@ -8,11 +8,11 @@ using WeightTracker.Api.Data;
 
 #nullable disable
 
-namespace WeightTracker.Api.Migrations
+namespace WeightTracker.Api.Migrations.Sqlite
 {
-    [DbContext(typeof(AppDbContext))]
-    [Migration("20260318005942_AddCreatedAtIndexes")]
-    partial class AddCreatedAtIndexes
+    [DbContext(typeof(SqliteDbContext))]
+    [Migration("20260319231349_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -26,7 +26,8 @@ namespace WeightTracker.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTime>("CreatedAt")
+                    b.Property<string>("CreatedAt")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<int>("TargetCalories")
@@ -48,7 +49,8 @@ namespace WeightTracker.Api.Migrations
                     b.Property<int?>("CaloriesKcal")
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTime>("CreatedAt")
+                    b.Property<string>("CreatedAt")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<DateOnly>("Date")
@@ -57,7 +59,8 @@ namespace WeightTracker.Api.Migrations
                     b.Property<string>("Notes")
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTime>("UpdatedAt")
+                    b.Property<string>("UpdatedAt")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<decimal?>("WeightKg")
@@ -77,7 +80,8 @@ namespace WeightTracker.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTime>("CreatedAt")
+                    b.Property<string>("CreatedAt")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Notes")

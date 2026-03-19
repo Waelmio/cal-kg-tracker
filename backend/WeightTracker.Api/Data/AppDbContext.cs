@@ -3,7 +3,7 @@ using WeightTracker.Api.Models;
 
 namespace WeightTracker.Api.Data;
 
-public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+public class AppDbContext(DbContextOptions options) : DbContext(options)
 {
     public DbSet<DailyLog> DailyLogs => Set<DailyLog>();
     public DbSet<Goal> Goals => Set<Goal>();

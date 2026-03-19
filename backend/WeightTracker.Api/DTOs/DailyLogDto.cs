@@ -8,8 +8,8 @@ public record DailyLogDto(
     decimal? WeightKg,
     int? CaloriesKcal,
     string? Notes,
-    DateTime CreatedAt,
-    DateTime UpdatedAt);
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
 
 public record UpsertDailyLogDto(
     string Date,
