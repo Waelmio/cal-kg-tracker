@@ -59,9 +59,12 @@ const error = ref('')
 async function loadExisting() {
   try { existing.value = await api.getByDate(date.value) }
   catch { existing.value = null }
-  weightDisplay.value = existing.value?.weightKg != null
-    ? displayWeight(existing.value.weightKg, unit.value)
-    : ''
+  if (existing.value?.weightKg != null) {
+    weightDisplay.value = displayWeight(existing.value.weightKg, unit.value)
+  } else {
+    const lastLog = store.logs.find(l => l.weightKg != null && l.date !== date.value)
+    weightDisplay.value = lastLog?.weightKg != null ? displayWeight(lastLog.weightKg, unit.value) : ''
+  }
 }
 
 watch(date, loadExisting)
