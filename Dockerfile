@@ -1,10 +1,11 @@
 # Stage 1: Build frontend
 FROM node:22-alpine AS frontend-build
+RUN corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /app
-COPY frontend/weight-tracker-ui/package*.json ./
-RUN npm ci
+COPY frontend/weight-tracker-ui/package.json frontend/weight-tracker-ui/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 COPY frontend/weight-tracker-ui/ ./
-RUN npm run build
+RUN pnpm run build
 
 # Stage 2: Build and publish backend
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS backend-build
