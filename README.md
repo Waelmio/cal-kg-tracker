@@ -24,22 +24,25 @@ SQL_DB_PATH=/your/path/weighttracker.db docker compose up
 
 ### Local development
 
-**Backend**
+Run both backend and frontend together from the root:
 
 ```bash
-cd backend/WeightTracker.Api
-dotnet run
-# API at http://localhost:5118
-# Swagger UI at http://localhost:5118/swagger
+make dev
 ```
 
-**Frontend**
+Or individually:
 
 ```bash
-cd frontend/weight-tracker-ui
-npm install
-npm run dev
-# App at http://localhost:5173
+make dev-backend   # API at http://localhost:5118, Swagger at /swagger
+make dev-frontend  # App at http://localhost:5173
+```
+
+### Running tests
+
+```bash
+make test          # Run all tests in parallel
+make test-backend  # Backend only (xUnit)
+make test-frontend # Frontend only (Vitest)
 ```
 
 ## Features
@@ -54,24 +57,9 @@ npm run dev
 - User settings: height, preferred unit, cached TDEE
 - SQLite database, auto-migrated on startup
 
-## API Endpoints
+## API
 
-| Method | Path | Notes |
-|---|---|---|
-| GET | `/api/daily-logs` | All daily logs |
-| GET/PUT | `/api/daily-logs/{date}` | date = `yyyy-MM-dd` |
-| DELETE | `/api/daily-logs/{date}` | Delete entire day |
-| DELETE | `/api/daily-logs/{date}/weight` | Null weight only |
-| DELETE | `/api/daily-logs/{date}/calories` | Null calories only |
-| GET/POST | `/api/goals` | Goal history |
-| GET | `/api/goals/active` | Most recent goal |
-| DELETE | `/api/goals/{id}` | Delete a goal |
-| GET/POST | `/api/calorie-goals` | Calorie goal history |
-| GET | `/api/calorie-goals/active` | Most recent calorie goal |
-| DELETE | `/api/calorie-goals/{id}` | Delete a calorie goal |
-| GET | `/api/dashboard` | Aggregated stats |
-| GET | `/api/tdee` | TDEE estimate |
-| GET/PUT | `/api/settings` | Height, unit preference |
+See [docs/API.md](docs/API.md) for the full endpoint reference. Swagger UI is also available at `http://localhost:5118/swagger` when running locally.
 
 ## Project Structure
 
