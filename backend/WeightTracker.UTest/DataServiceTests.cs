@@ -133,13 +133,13 @@ public class DataServiceTests
     public async Task ExportAsync_ExportsCurrentSettings()
     {
         using var db = CreateDb();
-        db.UserSettings.Add(new UserSettings { Id = 1, HeightCm = 175m, PreferredUnit = "lbs", TdeeKcal = 2200 });
+        db.UserSettings.Add(new UserSettings { Id = 1, HeightCm = 175, PreferredUnit = "lbs", TdeeKcal = 2200 });
         await db.SaveChangesAsync();
         var service = new DataService(db);
 
         var result = await service.ExportAsync();
 
-        Assert.Equal(175m, result.Settings.HeightCm);
+        Assert.Equal(175, result.Settings.HeightCm);
         Assert.Equal("lbs", result.Settings.PreferredUnit);
         Assert.Equal(2200, result.Settings.TdeeKcal);
     }
@@ -209,7 +209,7 @@ public class DataServiceTests
 
         await service.ImportAsync(new ExportImportDto(
             new UserSettingsDto(null, "kg", null),
-            [new DailyLogDto(0, "2024-01-10", 75.5m, 2000, "note", ts, ts)],
+            [new DailyLogDto(0, "2024-01-10", 75.5m, 2000, "note", null, false, ts, ts)],
             [],
             []
         ));
@@ -270,19 +270,19 @@ public class DataServiceTests
     public async Task ImportAsync_UpdatesSettings()
     {
         using var db = CreateDb();
-        db.UserSettings.Add(new UserSettings { Id = 1, HeightCm = 170m, PreferredUnit = "kg", TdeeKcal = 2000 });
+        db.UserSettings.Add(new UserSettings { Id = 1, HeightCm = 170, PreferredUnit = "kg", TdeeKcal = 2000 });
         await db.SaveChangesAsync();
         var service = new DataService(db);
 
         await service.ImportAsync(new ExportImportDto(
-            new UserSettingsDto(185m, "lbs", 2500),
+            new UserSettingsDto(185, "lbs", 2500),
             [],
             [],
             []
         ));
 
         var settings = await db.UserSettings.FindAsync(1);
-        Assert.Equal(185m, settings!.HeightCm);
+        Assert.Equal(185, settings!.HeightCm);
         Assert.Equal("lbs", settings.PreferredUnit);
         Assert.Equal(2500, settings.TdeeKcal);
     }
@@ -294,7 +294,7 @@ public class DataServiceTests
         var service = new DataService(db);
 
         await service.ImportAsync(new ExportImportDto(
-            new UserSettingsDto(175m, "kg", 1900),
+            new UserSettingsDto(175, "kg", 1900),
             [],
             [],
             []
@@ -302,7 +302,7 @@ public class DataServiceTests
 
         var settings = await db.UserSettings.FindAsync(1);
         Assert.NotNull(settings);
-        Assert.Equal(175m, settings.HeightCm);
+        Assert.Equal(175, settings.HeightCm);
         Assert.Equal(1900, settings.TdeeKcal);
     }
 
@@ -319,7 +319,7 @@ public class DataServiceTests
 
         await service.ImportAsync(new ExportImportDto(
             new UserSettingsDto(null, "kg", null),
-            [new DailyLogDto(0, "2024-01-10", 70m, null, null, ts, ts)],
+            [new DailyLogDto(0, "2024-01-10", 70m, null, null, null, false, ts, ts)],
             [],
             []
         ));
@@ -336,7 +336,7 @@ public class DataServiceTests
     {
         using var db = CreateDb();
         var ts = new DateTime(2024, 1, 10, 0, 0, 0, DateTimeKind.Utc);
-        db.UserSettings.Add(new UserSettings { Id = 1, HeightCm = 175m, PreferredUnit = "kg", TdeeKcal = 2000 });
+        db.UserSettings.Add(new UserSettings { Id = 1, HeightCm = 175, PreferredUnit = "kg", TdeeKcal = 2000 });
         db.DailyLogs.Add(new DailyLog { Date = new DateOnly(2024, 1, 10), WeightKg = 75m, CaloriesKcal = 2000, CreatedAt = ts, UpdatedAt = ts });
         db.Goals.Add(new Goal { TargetWeightKg = 70m, TargetDate = new DateOnly(2024, 12, 31), StartDate = new DateOnly(2024, 1, 1), CreatedAt = ts });
         db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 1800, CreatedAt = ts });

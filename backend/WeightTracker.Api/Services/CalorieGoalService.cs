@@ -21,9 +21,11 @@ public class CalorieGoalService(AppDbContext db) : ICalorieGoalService
 
     public async Task<CalorieGoalDto> CreateAsync(CreateCalorieGoalDto dto)
     {
-        var today = DateTimeOffset.UtcNow.Date;
+        var todayUtc = DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime);
+        var startUtc = todayUtc.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        var endUtc = startUtc.AddDays(1);
         var existing = await db.CalorieGoals
-            .Where(g => g.CreatedAt >= today && g.CreatedAt < today.AddDays(1))
+            .Where(g => g.CreatedAt >= startUtc && g.CreatedAt < endUtc)
             .ToListAsync();
         db.CalorieGoals.RemoveRange(existing);
 

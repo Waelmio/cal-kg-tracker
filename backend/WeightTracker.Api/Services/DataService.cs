@@ -16,7 +16,7 @@ public class DataService(AppDbContext db) : IDataService
 
         return new ExportImportDto(
             new UserSettingsDto(settings.HeightCm, settings.PreferredUnit, settings.TdeeKcal),
-            logs.Select(l => new DailyLogDto(l.Id, l.Date.ToString("yyyy-MM-dd"), l.WeightKg, l.CaloriesKcal, l.Notes, l.CreatedAt, l.UpdatedAt)).ToList(),
+            logs.Select(l => new DailyLogDto(l.Id, l.Date.ToString("yyyy-MM-dd"), l.WeightKg, l.CaloriesKcal, l.Notes, null, l.IsCheatDay, l.CreatedAt, l.UpdatedAt)).ToList(),
             goals.Select(g => new GoalDto(g.Id, g.TargetWeightKg, g.TargetDate, g.StartingWeightKg, g.StartDate, g.Notes, g.CreatedAt)).ToList(),
             calorieGoals.Select(g => new CalorieGoalDto(g.Id, g.TargetCalories, g.CreatedAt)).ToList()
         );

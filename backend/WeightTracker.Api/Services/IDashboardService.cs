@@ -4,5 +4,5 @@ namespace WeightTracker.Api.Services;
 
 public interface IDashboardService
 {
-    Task<DashboardDto> GetAsync();
+    Task<DashboardDto> GetAsync(DateOnly today);
 }

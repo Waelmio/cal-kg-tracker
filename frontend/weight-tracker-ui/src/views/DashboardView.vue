@@ -138,24 +138,14 @@ const tdeeWeeklyDeficit = computed(() => {
 })
 
 const overallGoalDeficit = computed(() => {
-  const goal = dashboard.data?.activeGoal
-  if (!goal) return null
+  const d = dashboard.data
+  if (d == null || d.overallCalorieDeficit == null || !d.overallCalorieDeficitDays || d.dailyCalorieTarget == null) return null
   const tdee = settingsStore.settings.tdeeKcal
-  const startDate = goal.startDate
-  const logsFromGoal = logStore.logs.filter(l => l.date >= startDate && l.caloriesKcal != null)
-  if (logsFromGoal.length === 0) return null
-  let vsTarget = 0
-  let vsTdee = 0
-  for (const log of logsFromGoal) {
-    const target = calorieGoalsStore.getTargetForDate(log.date)
-    if (target != null) vsTarget += log.caloriesKcal! - target
-    if (tdee != null) vsTdee += log.caloriesKcal! - tdee
-  }
-  // Negate so positive = deficit = good (same convention as weeklyCalorieDeficit)
-  return {
-    vsTarget: Math.round(-vsTarget),
-    vsTdee: tdee != null ? Math.round(-vsTdee) : null,
-  }
+  const vsTarget = d.overallCalorieDeficit
+  // Reconstruct actual calories consumed to compute vs-TDEE variant
+  const actualSum = d.overallCalorieDeficitDays * d.dailyCalorieTarget - vsTarget
+  const vsTdee = tdee != null ? Math.round(d.overallCalorieDeficitDays * tdee - actualSum) : null
+  return { vsTarget, vsTdee }
 })
 
 const overallDeficitSubHtml = computed(() => {

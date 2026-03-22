@@ -97,8 +97,8 @@ const canShowTdeeProjection = computed(() =>
 function fromDateForRange(r: Range): string | null {
   const days = rangeDays[r]
   if (days == null) return null
-  const d = new Date()
-  d.setDate(d.getDate() - days)
+  const d = new Date(new Date().toLocaleDateString('en-CA') + 'T00:00:00Z')
+  d.setUTCDate(d.getUTCDate() - days)
   return d.toISOString().slice(0, 10)
 }
 
@@ -124,11 +124,11 @@ const logMap = computed(() => {
 
 function weeklyDates(from: string, to: string): string[] {
   const result: string[] = []
-  const d = new Date(from + 'T00:00:00')
-  const end = new Date(to + 'T00:00:00')
+  const d = new Date(from + 'T00:00:00Z')
+  const end = new Date(to + 'T00:00:00Z')
   while (d <= end) {
     result.push(d.toISOString().slice(0, 10))
-    d.setDate(d.getDate() + 7)
+    d.setUTCDate(d.getUTCDate() + 7)
   }
   if (result[result.length - 1] !== to) result.push(to)
   return result
@@ -170,8 +170,9 @@ const fmt = (d: string) =>
   new Intl.DateTimeFormat('en-GB', {
     day: '2-digit',
     month: '2-digit',
+    timeZone: 'UTC',
     ...(spansMultipleYears.value ? { year: '2-digit' } : {}),
-  }).format(new Date(d + 'T00:00:00'))
+  }).format(new Date(d + 'T00:00:00Z'))
 
 const chartData = computed(() => {
   const labels = allDates.value.map(fmt)

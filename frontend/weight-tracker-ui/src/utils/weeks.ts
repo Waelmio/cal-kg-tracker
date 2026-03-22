@@ -1,5 +1,9 @@
+// All Date objects passed to these functions must represent UTC midnight (e.g. created via
+// new Date(dateStr + 'T00:00:00Z')). UTC components are used throughout so that local-timezone
+// offsets never shift the calendar date.
+
 export function getISOWeek(date: Date): number {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
   const dayNum = d.getUTCDay() || 7
   d.setUTCDate(d.getUTCDate() + 4 - dayNum)
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
@@ -7,7 +11,7 @@ export function getISOWeek(date: Date): number {
 }
 
 export function getISOWeekYear(date: Date): number {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
   const dayNum = d.getUTCDay() || 7
   d.setUTCDate(d.getUTCDate() + 4 - dayNum)
   return d.getUTCFullYear()
@@ -29,10 +33,10 @@ export function getWeekDates(isoWeekYear: number, isoWeek: number): string[] {
 
 export function getLast6Weeks(): Array<{ year: number; week: number }> {
   const result: Array<{ year: number; week: number }> = []
-  const today = new Date()
+  const today = new Date(new Date().toLocaleDateString('en-CA') + 'T00:00:00Z')
   for (let i = 5; i >= 0; i--) {
     const d = new Date(today)
-    d.setDate(today.getDate() - i * 7)
+    d.setUTCDate(today.getUTCDate() - i * 7)
     result.push({ year: getISOWeekYear(d), week: getISOWeek(d) })
   }
   return result

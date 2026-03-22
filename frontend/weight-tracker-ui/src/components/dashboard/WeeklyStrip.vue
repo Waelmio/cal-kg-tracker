@@ -82,10 +82,10 @@ const props = defineProps<{
 }>()
 
 function getTargetForDate(date: string): number | null {
-  const d = new Date(date)
+  const d = new Date(date + 'T00:00:00Z')
   const effective = props.calorieGoals.find((g) => {
     const goalDay = new Date(g.createdAt)
-    goalDay.setHours(0, 0, 0, 0)
+    goalDay.setUTCHours(0, 0, 0, 0)
     return goalDay <= d
   })
   return effective?.targetCalories ?? null
@@ -115,7 +115,7 @@ interface WeekItem {
   days: DayRow[]
 }
 
-const today = new Date()
+const today = new Date(new Date().toLocaleDateString('en-CA') + 'T00:00:00Z')
 const currentISOWeek = getISOWeek(today)
 const currentISOWeekYear = getISOWeekYear(today)
 
@@ -124,10 +124,10 @@ const selectedIndex = ref<number>(4)
 
 function goBack() {
   offset.value += 1
-  const d = new Date()
-  d.setDate(d.getDate() - (5 + offset.value) * 7)
-  const dayNum = d.getDay() || 7
-  d.setDate(d.getDate() - (dayNum - 1))
+  const d = new Date(new Date().toLocaleDateString('en-CA') + 'T00:00:00Z')
+  d.setUTCDate(d.getUTCDate() - (5 + offset.value) * 7)
+  const dayNum = d.getUTCDay() || 7
+  d.setUTCDate(d.getUTCDate() - (dayNum - 1))
   emit('need-from', d.toISOString().slice(0, 10))
 }
 function goForward() { offset.value -= 1 }
@@ -138,14 +138,14 @@ const logMap = computed(() => {
   return m
 })
 
-const dayFmt = new Intl.DateTimeFormat('en', { weekday: 'short', day: 'numeric', month: 'short' })
-const monthDayFmt = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' })
+const dayFmt = new Intl.DateTimeFormat('en', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
+const monthDayFmt = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', timeZone: 'UTC' })
 
 const weekData = computed<WeekItem[]>(() => {
-  const now = new Date()
+  const now = new Date(new Date().toLocaleDateString('en-CA') + 'T00:00:00Z')
   const weeks = Array.from({ length: 6 }, (_, i) => {
     const d = new Date(now)
-    d.setDate(now.getDate() - (5 - i + offset.value) * 7)
+    d.setUTCDate(now.getUTCDate() - (5 - i + offset.value) * 7)
     return { year: getISOWeekYear(d), week: getISOWeek(d) }
   })
 
@@ -156,10 +156,10 @@ const weekData = computed<WeekItem[]>(() => {
     const days: DayRow[] = dates.map((date) => {
       const log = logMap.value.get(date)
       const calories = log?.caloriesKcal ?? null
-      const target = getTargetForDate(date)
+      const target = log?.calorieTarget ?? getTargetForDate(date)
       return {
         date,
-        label: dayFmt.format(new Date(date + 'T00:00:00')),
+        label: dayFmt.format(new Date(date + 'T00:00:00Z')),
         weightDisplay: log?.weightKg != null ? formatWeight(log.weightKg, props.unit) : '—',
         calories,
         target,
@@ -192,13 +192,13 @@ const weekData = computed<WeekItem[]>(() => {
       status = avgCalories <= weekTarget ? 'green' : 'red'
     }
 
-    const firstDate = new Date(dates[0] + 'T00:00:00')
-    const lastDate = new Date(dates[6] + 'T00:00:00')
+    const firstDate = new Date(dates[0] + 'T00:00:00Z')
+    const lastDate = new Date(dates[6] + 'T00:00:00Z')
     const startStr = monthDayFmt.format(firstDate)
-    const endStr = firstDate.getMonth() === lastDate.getMonth()
-      ? lastDate.getDate().toString()
+    const endStr = firstDate.getUTCMonth() === lastDate.getUTCMonth()
+      ? lastDate.getUTCDate().toString()
       : monthDayFmt.format(lastDate)
-    const dateRange = `${startStr}–${endStr}, ${lastDate.getFullYear()}`
+    const dateRange = `${startStr}–${endStr}, ${lastDate.getUTCFullYear()}`
 
     return {
       year,

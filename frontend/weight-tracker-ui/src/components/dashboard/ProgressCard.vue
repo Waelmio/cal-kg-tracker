@@ -22,7 +22,7 @@
         </span>
         <span v-if="progressPercent != null" class="text-primary-600 font-medium">{{ progressPercent }}%</span>
         <span class="flex-1 text-gray-400 text-right">
-          <template v-if="projectedDate">On track for {{ new Date(projectedDate).toLocaleDateString('en-GB') }}</template>
+          <template v-if="projectedDate">On track for {{ new Date(projectedDate + 'T00:00:00Z').toLocaleDateString('en-GB', { timeZone: 'UTC' }) }}</template>
           <template v-else-if="kgToGoal === 0" class="text-emerald-500 font-medium">Goal reached!</template>
         </span>
       </div>

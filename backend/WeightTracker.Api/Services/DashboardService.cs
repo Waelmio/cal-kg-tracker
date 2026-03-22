@@ -1,222 +1,245 @@
 using Microsoft.EntityFrameworkCore;
 using WeightTracker.Api.Data;
 using WeightTracker.Api.DTOs;
+using WeightTracker.Api.Models;
 
 namespace WeightTracker.Api.Services;
 
-public class DashboardService(AppDbContext db) : IDashboardService
+public class DashboardService(AppDbContext db, ICalorieLogService calorieLogService) : IDashboardService
 {
-    public async Task<DashboardDto> GetAsync()
+    private record WeightStats(
+        decimal? Avg7Days,
+        decimal? Avg7DaysTrend,
+        decimal? PointShift7Days,   // latest vs ~7 days ago, used for goal date projection
+        decimal? Trend30Days,
+        decimal? VolatilityKg,
+        decimal? ChangeRateKgPerWeek);
+
+    private record WeeklyCalorieStats(
+        double? AvgCalories,
+        int? Deficit,
+        int Days);
+
+    public async Task<DashboardDto> GetAsync(DateOnly today)
     {
-        var today = DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime);
-        var settings = await db.UserSettings.FindAsync(1);
-        var goal = await db.Goals.OrderByDescending(g => g.CreatedAt).FirstOrDefaultAsync();
-        var todayUtcEnd = today.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
-        var activeCalorieGoal = await db.CalorieGoals
-            .Where(g => g.CreatedAt <= todayUtcEnd)
-            .OrderByDescending(g => g.CreatedAt)
-            .FirstOrDefaultAsync();
+        var now = today;
+        var settings = await db.UserSettings.FirstAsync();
+        var weightGoal = await db.Goals.OrderByDescending(g => g.CreatedAt).FirstOrDefaultAsync();
 
-        // All logs ordered desc for trend calculations
-        var logs = await db.DailyLogs
-            .Where(l => l.Date <= today)
-            .OrderByDescending(l => l.Date)
-            .ToListAsync();
+        // Single enriched load: all logs up to today, each paired with the active goal on that date.
+        var allEnriched = await calorieLogService.GetEnrichedAsync(to: now);
+        var allLogs = allEnriched.Select(e => e.Log).ToList();
 
-        var todayLog = logs.FirstOrDefault(l => l.Date == today);
+        var daysFromMonday = ((int)now.DayOfWeek + 6) % 7;
+        var weekStart = now.AddDays(-daysFromMonday);
+        var weekEnriched = allEnriched.Where(e => e.Log.Date >= weekStart && e.Log.CaloriesKcal != null).ToList();
 
-        var latestWeightLog = logs.FirstOrDefault(l => l.WeightKg != null);
-        var currentWeight = latestWeightLog?.WeightKg;
+        var todayEnriched = allEnriched.FirstOrDefault(e => e.Log.Date == now);
+        var currentWeight = allLogs.FirstOrDefault(l => l.WeightKg != null)?.WeightKg;
 
-        // Weekly avg calories (current week Mon–Sun)
-        var daysFromMonday = ((int)today.DayOfWeek + 6) % 7; // Mon=0 … Sun=6
-        var weekStart = today.AddDays(-daysFromMonday);
-        var weekEnd = weekStart.AddDays(6);
-        var weekCalories = await db.DailyLogs
-            .Where(l => l.Date >= weekStart && l.Date <= weekEnd && l.CaloriesKcal != null)
-            .Select(l => l.CaloriesKcal!.Value)
-            .ToListAsync();
-        double? weeklyAvgCalories = weekCalories.Count > 0
-            ? Math.Round(weekCalories.Average(), 0)
-            : null;
+        var weight = CalcWeightStats(allLogs, now);
+        var weekly = CalcWeeklyCalorieStats(weekEnriched);
+        var (overallCalorieDeficit, overallCalorieDeficitDays) = CalcOverallCalorieDeficit(allEnriched, weightGoal);
+        var (progressPercent, kgToGoal, projectedDate) = CalcGoalProgress(weightGoal, weight.Avg7Days, currentWeight, weight.PointShift7Days, now);
+        var (calorieStreakDays, calorieStreakNextDays, caloriesExcessOverStreak) = CalcCalorieStreak(allEnriched);
 
-        // 7-day trend (latest weight vs weight closest to 7 days ago)
-        // kept for internal projected-date calculation only
-        decimal? trend7 = null;
-        if (latestWeightLog is not null)
-        {
-            var cutoff7 = latestWeightLog.Date.AddDays(-7);
-            var ref7 = logs.FirstOrDefault(l => l.WeightKg != null && l.Date <= cutoff7);
-            if (ref7 is not null) trend7 = latestWeightLog.WeightKg - ref7.WeightKg;
-        }
+        // If today has no log, fall back to the active goal for today's target display.
+        var todayCalorieTarget = todayEnriched?.EffectiveTarget
+            ?? await calorieLogService.GetEffectiveTargetAsync(now, false);
 
-        // 7-day average weight and its trend vs previous 7 days
-        var window7End = today;
-        var window7Start = today.AddDays(-6);
-        var window14Start = today.AddDays(-13);
-        var last7Weights = logs
-            .Where(l => l.WeightKg != null && l.Date >= window7Start && l.Date <= window7End)
-            .Select(l => l.WeightKg!.Value).ToList();
-        var prev7Weights = logs
-            .Where(l => l.WeightKg != null && l.Date >= window14Start && l.Date < window7Start)
-            .Select(l => l.WeightKg!.Value).ToList();
-        decimal? avgWeight7Days = last7Weights.Count > 0
-            ? Math.Round(last7Weights.Average(), 2)
-            : null;
-        decimal? avgWeight7DaysTrend = last7Weights.Count > 0 && prev7Weights.Count > 0
-            ? Math.Round(last7Weights.Average() - prev7Weights.Average(), 2)
-            : null;
-
-        // 30-day trend using 7-day window averages to reduce single-weigh-in noise:
-        // recent avg (last 7 days) vs reference avg (7-day window centred on 30 days ago)
-        decimal? trend30 = null;
-        var ref30Start = today.AddDays(-33);
-        var ref30End = today.AddDays(-27);
-        var ref30Weights = logs
-            .Where(l => l.WeightKg != null && l.Date >= ref30Start && l.Date <= ref30End)
-            .Select(l => l.WeightKg!.Value).ToList();
-        if (last7Weights.Count > 0 && ref30Weights.Count > 0)
-            trend30 = Math.Round(last7Weights.Average() - ref30Weights.Average(), 2);
-
-        // Weight volatility: population std dev of last 7 days
-        decimal? weightVolatilityKg = null;
-        if (last7Weights.Count >= 2)
-        {
-            var mean = last7Weights.Average();
-            var variance = last7Weights.Average(w => (double)((w - mean) * (w - mean)));
-            weightVolatilityKg = Math.Round((decimal)Math.Sqrt(variance), 2);
-        }
-
-        // Rate of change derived from 30-day trend
-        decimal? weightChangeRateKgPerWeek = trend30.HasValue
-            ? Math.Round(trend30.Value / 30m * 7m, 2)
-            : null;
-
-        // Weekly calorie deficit: sum of (target - calories) for each logged day this week
-        int? weeklyCalorieDeficit = null;
-        int weeklyCalorieDeficitDays = weekCalories.Count;
-        if (activeCalorieGoal != null && weekCalories.Count > 0)
-            weeklyCalorieDeficit = weekCalories.Count * activeCalorieGoal.TargetCalories - weekCalories.Sum();
-
-        // Goal progress
-        double? progressPercent = null;
-        decimal? kgToGoal = null;
-        DateOnly? projectedDate = null;
-
-        var weightForGoalProgress = avgWeight7Days ?? currentWeight;
-        if (goal is not null && weightForGoalProgress.HasValue)
-        {
-            kgToGoal = Math.Max(0, weightForGoalProgress.Value - goal.TargetWeightKg);
-
-            if (goal.StartingWeightKg.HasValue)
-            {
-                var totalToLose = goal.StartingWeightKg.Value - goal.TargetWeightKg;
-                var lost = goal.StartingWeightKg.Value - weightForGoalProgress.Value;
-                if (totalToLose != 0)
-                    progressPercent = Math.Clamp(Math.Round((double)(lost / totalToLose * 100), 1), 0, 100);
-            }
-
-            // Project goal completion date from 7-day trend
-            if (trend7.HasValue && trend7.Value < 0 && kgToGoal > 0)
-            {
-                var ratePerDay = (double)trend7.Value / 7.0;
-                var daysNeeded = (double)kgToGoal.Value / (-ratePerDay);
-                projectedDate = today.AddDays((int)Math.Ceiling(daysNeeded));
-            }
-        }
-
-        // BMI
-        double? bmi = null;
-        if (currentWeight.HasValue && settings?.HeightCm.HasValue == true)
-        {
-            var h = (double)settings.HeightCm!.Value / 100.0;
-            bmi = Math.Round((double)currentWeight.Value / (h * h), 1);
-        }
-
-        // Estimated TDEE from last-30-days calorie avg + 30-day weight trend
-        var thirtyDaysAgo = today.AddDays(-30);
-        var last30CalorieLogs = logs
-            .Where(l => l.Date > thirtyDaysAgo && l.CaloriesKcal != null && l.WeightKg != null)
-            .ToList();
-        int? estimatedTdeeKcal = null;
-        if (last30CalorieLogs.Count >= 15 && trend30.HasValue)
-        {
-            double avgDailyCalories = last30CalorieLogs.Average(l => l.CaloriesKcal!.Value);
-            double dailyWeightChangeKg = (double)trend30.Value / 30.0;
-            estimatedTdeeKcal = (int)Math.Round(avgDailyCalories - dailyWeightChangeKg * 7700.0);
-        }
-
-        // Calorie streak: longest window from today backwards (logged days only)
-        // where the running average stays below the daily calorie target
-        int calorieStreakDays = 0;
-        int caloriesExcessOverStreak = 0;
-        int? calorieStreakNextDays = null;
-        if (activeCalorieGoal != null)
-        {
-            var loggedCalorieDays = logs
-                .Where(l => l.CaloriesKcal != null)
-                .OrderByDescending(l => l.Date)
-                .ToList();
-
-            long runningSum = 0;
-            int count = 0;
-            foreach (var log in loggedCalorieDays)
-            {
-                runningSum += log.CaloriesKcal!.Value;
-                count++;
-                double avg = (double) runningSum / count;
-                
-                // We are not finished with the actual streak
-                if (caloriesExcessOverStreak == 0) {
-                    if (avg < activeCalorieGoal.TargetCalories)
-                        calorieStreakDays = count;
-                    else
-                    {
-                        calorieStreakNextDays = count;
-                        caloriesExcessOverStreak = (int) Math.Ceiling(runningSum - (double) activeCalorieGoal.TargetCalories * count);
-                    }
-                }
-                // We finished checking the first streak, now calculating what the next streak would be like.
-                else {
-                    // If we win caloriesExcessOverStreak calories
-                    avg -= (double)caloriesExcessOverStreak / count;
-
-                    // Maybe we can win a few more days
-                    if (avg < activeCalorieGoal.TargetCalories)
-                        calorieStreakNextDays = count;
-                    else
-                        break;
-                }
-
-            }
-        }
-
-        GoalDto? goalDto = goal is null ? null : new GoalDto(
-            goal.Id, goal.TargetWeightKg, goal.TargetDate,
-            goal.StartingWeightKg, goal.StartDate,
-            goal.Notes, goal.CreatedAt);
+        GoalDto? goalDto = weightGoal is null ? null : new GoalDto(
+            weightGoal.Id, weightGoal.TargetWeightKg, weightGoal.TargetDate,
+            weightGoal.StartingWeightKg, weightGoal.StartDate,
+            weightGoal.Notes, weightGoal.CreatedAt);
 
         return new DashboardDto(
             currentWeight,
-            todayLog?.CaloriesKcal,
-            activeCalorieGoal?.TargetCalories,
-            weeklyAvgCalories,
-            avgWeight7Days,
-            avgWeight7DaysTrend,
-            trend30,
+            todayEnriched?.Log.CaloriesKcal,
+            todayCalorieTarget,
+            weekly.AvgCalories,
+            weight.Avg7Days,
+            weight.Avg7DaysTrend,
+            weight.Trend30Days,
             goalDto,
             progressPercent,
             kgToGoal,
             projectedDate,
-            bmi,
-            logs.Count,
-            estimatedTdeeKcal,
+            CalcBmi(currentWeight, settings),
+            allLogs.Count,
+            CalcEstimatedTdee(allLogs, now, weight.Trend30Days),
             calorieStreakDays,
             calorieStreakNextDays,
             caloriesExcessOverStreak,
-            weightVolatilityKg,
-            weightChangeRateKgPerWeek,
-            weeklyCalorieDeficit,
-            weeklyCalorieDeficitDays);
+            weight.VolatilityKg,
+            weight.ChangeRateKgPerWeek,
+            weekly.Deficit,
+            weekly.Days,
+            overallCalorieDeficit,
+            overallCalorieDeficitDays);
+    }
+
+    // Computes all weight-related stats from a single pass over the logs.
+    private static WeightStats CalcWeightStats(List<DailyLog> logs, DateOnly today)
+    {
+        var last7 = logs
+            .Where(l => l.WeightKg != null && l.Date >= today.AddDays(-6))
+            .Select(l => l.WeightKg!.Value).ToList();
+        var prev7 = logs
+            .Where(l => l.WeightKg != null && l.Date >= today.AddDays(-13) && l.Date < today.AddDays(-6))
+            .Select(l => l.WeightKg!.Value).ToList();
+
+        decimal? avg7 = last7.Count > 0 ? Math.Round(last7.Average(), 2) : null;
+        decimal? avg7Trend = last7.Count > 0 && prev7.Count > 0
+            ? Math.Round(last7.Average() - prev7.Average(), 2) : null;
+
+        // Point-to-point shift from the latest weigh-in to one ~7 days earlier — used for projecting goal date.
+        decimal? pointShift7 = null;
+        var latestWeight = logs.FirstOrDefault(l => l.WeightKg != null);
+        if (latestWeight is not null)
+        {
+            var ref7 = logs.FirstOrDefault(l => l.WeightKg != null && l.Date <= latestWeight.Date.AddDays(-7));
+            if (ref7 is not null) pointShift7 = latestWeight.WeightKg - ref7.WeightKg;
+        }
+
+        // 30-day trend: recent 7-day avg vs a 7-day reference window centred on 30 days ago.
+        decimal? trend30 = null;
+        if (last7.Count > 0)
+        {
+            var ref30 = logs
+                .Where(l => l.WeightKg != null && l.Date >= today.AddDays(-33) && l.Date <= today.AddDays(-27))
+                .Select(l => l.WeightKg!.Value).ToList();
+            if (ref30.Count > 0)
+                trend30 = Math.Round(last7.Average() - ref30.Average(), 2);
+        }
+
+        // Population std dev of last 7 days.
+        decimal? volatility = null;
+        if (last7.Count >= 2)
+        {
+            var mean = last7.Average();
+            var variance = last7.Average(w => (double)((w - mean) * (w - mean)));
+            volatility = Math.Round((decimal)Math.Sqrt(variance), 2);
+        }
+
+        decimal? changeRate = trend30.HasValue ? Math.Round(trend30.Value / 30m * 7m, 2) : null;
+
+        return new WeightStats(avg7, avg7Trend, pointShift7, trend30, volatility, changeRate);
+    }
+
+    // Returns weekly average calories and calorie deficit for the current week.
+    // Each log's EffectiveTarget already accounts for cheat days vs. regular goal.
+    private static WeeklyCalorieStats CalcWeeklyCalorieStats(List<DailyLogWithTarget> weekLogs)
+    {
+        double? avg = weekLogs.Count > 0 ? Math.Round(weekLogs.Average(e => e.Log.CaloriesKcal!.Value), 0) : null;
+        var logsWithGoal = weekLogs.Where(e => e.EffectiveTarget.HasValue).ToList();
+        if (logsWithGoal.Count == 0) return new(avg, null, weekLogs.Count);
+        var deficit = logsWithGoal.Sum(e => e.EffectiveTarget!.Value - e.Log.CaloriesKcal!.Value);
+        return new(avg, deficit, weekLogs.Count);
+    }
+
+    // Returns overall calorie deficit since the weight goal's start date.
+    // Each log uses the calorie goal that was active on that specific date.
+    private static (int? deficit, int days) CalcOverallCalorieDeficit(List<DailyLogWithTarget> allLogs, Goal? goal)
+    {
+        if (goal is null) return (null, 0);
+        var goalLogs = allLogs
+            .Where(e => e.Log.Date >= goal.StartDate && e.Log.CaloriesKcal != null && e.EffectiveTarget.HasValue)
+            .ToList();
+        if (goalLogs.Count == 0) return (null, 0);
+        var deficit = goalLogs.Sum(e => e.EffectiveTarget!.Value - e.Log.CaloriesKcal!.Value);
+        return (deficit, goalLogs.Count);
+    }
+
+    // Returns goal progress: percent complete, kg remaining, and projected completion date.
+    private static (double? progress, decimal? kgToGoal, DateOnly? projectedDate) CalcGoalProgress(
+        Goal? goal, decimal? avg7Days, decimal? currentWeight, decimal? pointShift7, DateOnly today)
+    {
+        if (goal is null) return (null, null, null);
+        var weight = avg7Days ?? currentWeight;
+        if (!weight.HasValue) return (null, null, null);
+
+        var kgToGoal = Math.Max(0, weight.Value - goal.TargetWeightKg);
+
+        double? progress = null;
+        if (goal.StartingWeightKg.HasValue)
+        {
+            var totalToLose = goal.StartingWeightKg.Value - goal.TargetWeightKg;
+            var lost = goal.StartingWeightKg.Value - weight.Value;
+            if (totalToLose != 0)
+                progress = Math.Clamp(Math.Round((double)(lost / totalToLose * 100), 1), 0, 100);
+        }
+
+        DateOnly? projectedDate = null;
+        if (pointShift7.HasValue && pointShift7.Value < 0 && kgToGoal > 0)
+        {
+            var ratePerDay = (double)pointShift7.Value / 7.0;
+            projectedDate = today.AddDays((int)Math.Ceiling((double)kgToGoal / -ratePerDay));
+        }
+
+        return (progress, kgToGoal, projectedDate);
+    }
+
+    // Returns BMI based on the most recent weight and stored height.
+    private static double? CalcBmi(decimal? currentWeight, UserSettings? settings)
+    {
+        if (!currentWeight.HasValue || settings?.HeightCm is not { } heightCm) return null;
+        var h = (double)heightCm / 100.0;
+        return Math.Round((double)currentWeight.Value / (h * h), 1);
+    }
+
+    // Returns estimated TDEE from the last-30-days calorie average adjusted for the measured weight trend.
+    private static int? CalcEstimatedTdee(List<DailyLog> logs, DateOnly today, decimal? trend30)
+    {
+        if (!trend30.HasValue) return null;
+        var recent = logs
+            .Where(l => l.Date > today.AddDays(-30) && l.CaloriesKcal != null && l.WeightKg != null)
+            .ToList();
+        if (recent.Count < 15) return null;
+        var avgDailyCalories = recent.Average(l => l.CaloriesKcal!.Value);
+        var dailyWeightChangeKg = (double)trend30.Value / 30.0;
+        return (int)Math.Round(avgDailyCalories - dailyWeightChangeKg * 7700.0);
+    }
+
+    // Returns the calorie streak: days in aggregate deficit, next potential streak length,
+    // and kcal excess above the aggregate target that broke the streak.
+    // Each log uses the calorie goal active on its date; logs with no goal are skipped.
+    private static (int streakDays, int? nextDays, int excessKcal) CalcCalorieStreak(List<DailyLogWithTarget> logs)
+    {
+        var calorieDays = logs.Where(e => e.Log.CaloriesKcal != null && e.EffectiveTarget.HasValue).ToList();
+        if (calorieDays.Count == 0) return (0, null, 0);
+
+        long runningCalories = 0;
+        long runningTarget = 0;
+        int count = 0;
+        int streakDays = 0;
+        int excessKcal = 0;
+        int? nextDays = null;
+
+        foreach (var entry in calorieDays)
+        {
+            runningCalories += entry.Log.CaloriesKcal!.Value;
+            runningTarget += entry.EffectiveTarget!.Value;
+            count++;
+
+            if (excessKcal == 0)
+            {
+                if (runningCalories < runningTarget)
+                    streakDays = count;
+                else
+                {
+                    nextDays = count;
+                    excessKcal = (int)(runningCalories - runningTarget);
+                }
+            }
+            else
+            {
+                if (runningCalories - excessKcal < runningTarget)
+                    nextDays = count;
+                else
+                    break;
+            }
+        }
+
+        return (streakDays, nextDays, excessKcal);
     }
 }
