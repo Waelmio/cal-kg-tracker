@@ -39,6 +39,7 @@ else
     builder.Services.AddScoped<AppDbContext>(sp => sp.GetRequiredService<SqliteDbContext>());
 }
 
+builder.Services.AddScoped<ICalorieLogService, CalorieLogService>();
 builder.Services.AddScoped<IDailyLogService, DailyLogService>();
 builder.Services.AddScoped<IGoalService, GoalService>();
 builder.Services.AddScoped<ICalorieGoalService, CalorieGoalService>();

@@ -29,6 +29,14 @@ public class DailyLogController(IDailyLogService service) : ControllerBase
         return Ok(await service.UpsertAsync(normalized));
     }
 
+    [HttpPut("{date}/cheat-day")]
+    public async Task<ActionResult<DailyLogDto>> SetCheatDay(DateOnly date)
+        => Ok(await service.SetCheatDayAsync(date, true));
+
+    [HttpDelete("{date}/cheat-day")]
+    public async Task<ActionResult<DailyLogDto>> ClearCheatDay(DateOnly date)
+        => Ok(await service.SetCheatDayAsync(date, false));
+
     [HttpDelete("{date}")]
     public async Task<IActionResult> DeleteDay(DateOnly date)
     {
@@ -48,5 +56,13 @@ public class DailyLogController(IDailyLogService service) : ControllerBase
     {
         var log = await service.DeleteCaloriesAsync(date);
         return Ok(log);
+    }
+
+    [HttpPost("prefill-week")]
+    public async Task<IActionResult> PrefillWeek([FromQuery] DateOnly? today)
+    {
+        var date = today ?? DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime);
+        await service.PrefillWeekAsync(date);
+        return NoContent();
     }
 }

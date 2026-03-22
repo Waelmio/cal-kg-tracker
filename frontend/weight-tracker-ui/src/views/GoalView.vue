@@ -8,10 +8,10 @@
         <div>
           <p class="text-xs font-medium text-primary-600 uppercase tracking-wide">Active Goal</p>
           <p class="text-2xl font-bold text-gray-800 mt-1">{{ formatWeight(store.goal.targetWeightKg, unit) }}</p>
-          <p class="text-sm text-gray-500 mt-0.5">by {{ new Date(store.goal.targetDate).toLocaleDateString('en-GB') }}</p>
+          <p class="text-sm text-gray-500 mt-0.5">by {{ new Date(store.goal.targetDate + 'T00:00:00Z').toLocaleDateString('en-GB', { timeZone: 'UTC' }) }}</p>
         </div>
         <div class="text-right text-xs text-gray-400">
-          <p>Started {{ new Date(store.goal.startDate).toLocaleDateString('en-GB') }}</p>
+          <p>Started {{ new Date(store.goal.startDate + 'T00:00:00Z').toLocaleDateString('en-GB', { timeZone: 'UTC' }) }}</p>
           <p v-if="store.goal.startingWeightKg">from {{ formatWeight(store.goal.startingWeightKg, unit) }}</p>
         </div>
       </div>

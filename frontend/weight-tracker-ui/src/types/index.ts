@@ -6,6 +6,8 @@ export interface DailyLog {
   weightKg: number | null
   caloriesKcal: number | null
   notes: string | null
+  calorieTarget: number | null
+  isCheatDay: boolean
   createdAt: string
   updatedAt: string
 }
@@ -49,6 +51,8 @@ export interface DashboardData {
   weightChangeRateKgPerWeek: number | null
   weeklyCalorieDeficit: number | null
   weeklyCalorieDeficitDays: number
+  overallCalorieDeficit: number | null
+  overallCalorieDeficitDays: number
 }
 
 export interface CalorieGoal {

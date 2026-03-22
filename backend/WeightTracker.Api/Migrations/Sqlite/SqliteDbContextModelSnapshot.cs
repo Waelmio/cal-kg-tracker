@@ -53,6 +53,9 @@ namespace WeightTracker.Api.Migrations.Sqlite
                     b.Property<DateOnly>("Date")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("IsCheatDay")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Notes")
                         .HasColumnType("TEXT");
 
@@ -109,15 +112,15 @@ namespace WeightTracker.Api.Migrations.Sqlite
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<decimal?>("HeightCm")
-                        .HasColumnType("TEXT");
+                    b.Property<int?>("HeightCm")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("PreferredUnit")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<decimal?>("TdeeKcal")
-                        .HasColumnType("TEXT");
+                    b.Property<int?>("TdeeKcal")
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 

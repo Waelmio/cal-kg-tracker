@@ -9,5 +9,9 @@ namespace WeightTracker.Api.Controllers;
 public class DashboardController(IDashboardService service) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<DashboardDto>> Get() => Ok(await service.GetAsync());
+    public async Task<ActionResult<DashboardDto>> Get([FromQuery] DateOnly? today)
+    {
+        var date = today ?? DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime);
+        return Ok(await service.GetAsync(date));
+    }
 }

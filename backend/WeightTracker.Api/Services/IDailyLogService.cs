@@ -10,4 +10,6 @@ public interface IDailyLogService
     Task<bool> DeleteDayAsync(DateOnly date);
     Task<DailyLogDto?> DeleteWeightAsync(DateOnly date);
     Task<DailyLogDto?> DeleteCaloriesAsync(DateOnly date);
+    Task<DailyLogDto> SetCheatDayAsync(DateOnly date, bool isCheatDay);
+    Task PrefillWeekAsync(DateOnly today);
 }

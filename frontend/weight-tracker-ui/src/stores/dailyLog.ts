@@ -54,5 +54,20 @@ export const useDailyLogStore = defineStore('dailyLog', () => {
     }
   }
 
-  return { logs, loading, error, fetchAll, upsert, deleteDay, deleteWeight, deleteCalories }
+  async function toggleCheatDay(date: string, isCheatDay: boolean) {
+    const updated = isCheatDay ? await api.setCheatDay(date) : await api.clearCheatDay(date)
+    if (!isCheatDay && updated.id === 0) {
+      // Row was deleted (no weight/calories left)
+      logs.value = logs.value.filter((l) => l.date !== date)
+    } else {
+      const idx = logs.value.findIndex((l) => l.date === date)
+      if (idx !== -1) logs.value[idx] = updated
+      else {
+        logs.value.unshift(updated)
+        logs.value.sort((a, b) => b.date.localeCompare(a.date))
+      }
+    }
+  }
+
+  return { logs, loading, error, fetchAll, upsert, deleteDay, deleteWeight, deleteCalories, toggleCheatDay }
 })

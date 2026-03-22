@@ -18,6 +18,8 @@ const makeLog = (date: string, weightKg: number | null = null, caloriesKcal: num
   weightKg,
   caloriesKcal,
   notes: null,
+  calorieTarget: null,
+  isCheatDay: false,
   createdAt: '2024-01-01T00:00:00.000Z',
   updatedAt: '2024-01-01T00:00:00.000Z',
 })

@@ -5,7 +5,7 @@
       <form @submit.prevent="save" class="space-y-4">
         <div>
           <label class="label">Height (cm)</label>
-          <input v-model.number="form.heightCm" type="number" step="0.1" min="50" max="300"
+          <input v-model.number="form.heightCm" type="number" step="1" min="50" max="300"
             class="input" placeholder="e.g. 175" />
           <p class="text-xs text-gray-400 mt-1">Used to calculate BMI.</p>
         </div>

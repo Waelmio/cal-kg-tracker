@@ -18,3 +18,12 @@ export const deleteWeight = (date: string) =>
 
 export const deleteCalories = (date: string) =>
   client.delete<DailyLog | null>(`/daily-logs/${date}/calories`).then((r) => r.data)
+
+export const setCheatDay = (date: string) =>
+  client.put<DailyLog>(`/daily-logs/${date}/cheat-day`).then((r) => r.data)
+
+export const clearCheatDay = (date: string) =>
+  client.delete<DailyLog>(`/daily-logs/${date}/cheat-day`).then((r) => r.data)
+
+export const prefillWeek = (today: string) =>
+  client.post(`/daily-logs/prefill-week`, null, { params: { today } }).then(() => {})
