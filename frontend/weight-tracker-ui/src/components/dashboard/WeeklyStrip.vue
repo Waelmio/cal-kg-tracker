@@ -1,63 +1,104 @@
 <template>
   <div class="bg-white rounded-xl border border-gray-200 p-4">
-    <div class="mb-3 flex items-center justify-between">
-      <div>
-        <p class="text-xs font-medium text-gray-400 uppercase tracking-wide">Weekly Overview</p>
-        <p v-if="selectedWeek" class="text-xs text-gray-400 mt-0.5">{{ selectedWeek.dateRange }}</p>
-      </div>
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-3">
+      <p class="text-xs font-medium text-gray-400 uppercase tracking-wide">Calendar</p>
       <button
-        v-if="!selectedWeek?.isCurrent"
-        @click="jumpToCurrent"
+        :class="isOnToday ? 'invisible' : ''"
+        @click="jumpToToday"
         class="text-xs font-medium text-blue-500 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-full transition-colors"
-      >↩ This week</button>
+      >↩ Today</button>
     </div>
 
-    <div class="flex items-center gap-1.5">
-      <button @click="goBack" class="nav-btn">‹</button>
-
-      <div class="flex gap-2 flex-1 min-w-0">
-        <button
-          v-for="(w, i) in weekData"
-          :key="w.key"
-          @click="toggle(i)"
-          :class="chipClass(w, i === selectedIndex)"
-          class="relative flex flex-col items-center flex-1 min-w-0 py-2 rounded-xl text-xs font-semibold transition-all"
-        >
-          <span v-if="w.isCurrent" class="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-2 h-2 bg-blue-500 rounded-full ring-2 ring-white" />
-          <span>W{{ w.week }}</span>
-          <span class="font-normal text-[10px] leading-tight" :class="w.isEmpty ? 'opacity-25' : 'opacity-80'">
-            {{ w.avgCalories != null ? w.avgCalories : '—' }}
-          </span>
-          <span class="font-normal text-[10px] leading-tight" :class="w.isEmpty ? 'opacity-20' : 'opacity-70'">
-            {{ w.avgWeightDisplay ?? '·' }}
-          </span>
-        </button>
+    <!-- Month chip bar with its own ‹ › navigation -->
+    <div class="flex items-center gap-1 mb-3">
+      <button @click="chipBarPrev" class="nav-btn flex-shrink-0">‹</button>
+      <div class="flex-1 overflow-hidden">
+        <Transition name="fade" mode="out-in">
+          <div :key="`chip-${selectedYear}-${selectedMonth}`" class="flex gap-1.5 py-1 px-0.5">
+            <button
+              v-for="m in recentMonthsData"
+              :key="m.key"
+              @click="selectMonth(m.year, m.month)"
+              :class="monthChipClass(m)"
+              class="flex-shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+            >{{ m.label }}</button>
+          </div>
+        </Transition>
       </div>
-
-      <button @click="goForward" class="nav-btn">›</button>
+      <button @click="chipBarNext" class="nav-btn flex-shrink-0">›</button>
     </div>
 
-    <Transition name="expand">
-      <div v-if="selectedWeek" class="mt-3 border-t border-gray-100 pt-3">
-        <div
-          v-for="day in selectedWeek.days"
-          :key="day.date"
-          class="flex items-center justify-between py-1.5 text-xs sm:text-sm border-b border-gray-50 last:border-0 gap-1"
-        >
-          <span class="text-gray-500 w-24 sm:w-32 shrink-0 truncate">{{ day.label }}</span>
-          <button
-            @click="emit('edit-weight', day.date)"
-            class="text-gray-700 w-16 sm:w-20 text-right hover:text-blue-500 hover:underline transition-colors shrink-0"
-          >{{ day.weightDisplay }}</button>
-          <button
-            @click="emit('edit-calories', day.date)"
-            class="flex-1 text-right hover:underline transition-colors"
-            :class="calorieClass(day.calories, day.target)"
-          >{{ day.calories != null ? day.calories + ' kcal' : '—' }}</button>
-          <span class="w-10 sm:w-12 text-right font-light shrink-0" :class="calorieClass(day.calories, day.target)">
-            {{ day.target != null ? `/ ${day.target}` : '' }}
-          </span>
+    <!-- Month navigation -->
+    <div class="flex items-center justify-between mb-2">
+      <button @click="prevMonth" class="nav-btn">‹</button>
+      <span class="text-sm font-semibold text-gray-700">{{ currentMonthLabel }}</span>
+      <button @click="nextMonth" class="nav-btn">›</button>
+    </div>
+
+    <!-- Calendar grid + week detail slide on month change -->
+    <Transition :name="'slide-' + navDirection" mode="out-in">
+      <div :key="`${selectedYear}-${selectedMonth}`">
+
+        <!-- Calendar grid -->
+        <div class="cal-grid">
+          <div />
+          <div v-for="d in DAY_LABELS" :key="d" class="text-center text-[10px] font-medium text-gray-400 pb-1">{{ d }}</div>
+
+          <template v-for="week in calendarWeeks" :key="week.key">
+            <div :class="weekChipClass(week)" class="week-chip">
+              <span class="text-xs">{{ week.week }}</span>
+              <span v-if="week.avgWeightDisplay" class="text-[11px] opacity-80 leading-none mt-0.5">{{ week.avgWeightDisplay }}</span>
+            </div>
+
+            <button
+              v-for="day in week.days"
+              :key="day.date"
+              @click="selectDay(day)"
+              @dblclick.stop="emit('edit-calories', day.date)"
+              :class="dayCellClass(day)"
+              class="day-cell"
+            >
+              <span class="text-sm font-semibold leading-none">{{ day.dayNum }}</span>
+              <span v-if="!day.isOtherMonth && day.calories != null" class="text-xs leading-none opacity-90 mt-1">{{ day.calories }}</span>
+            </button>
+          </template>
         </div>
+
+        <!-- Legend -->
+        <div class="flex items-center gap-3 mt-3 text-[10px] text-gray-400">
+          <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-emerald-400 inline-block" />Under target</span>
+          <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-amber-400 inline-block" />Over week, month ok</span>
+          <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-rose-400 inline-block" />Over target</span>
+        </div>
+
+        <!-- Week detail -->
+        <div v-if="selectedWeek" class="mt-3 border-t border-gray-100 pt-3">
+          <div class="mb-2">
+            <span class="text-sm font-semibold text-gray-600">Week {{ selectedWeek.week }}<template v-if="selectedWeek.avgWeightDisplay"> · {{ selectedWeek.avgWeightDisplay }} {{ unit }}</template></span>
+          </div>
+          <div
+            v-for="day in selectedWeek.days"
+            :key="day.date"
+            class="flex items-center justify-between py-1.5 text-sm sm:text-base border-b border-gray-50 last:border-0 gap-1"
+            :class="day.date === selectedDay ? 'bg-gray-50 -mx-1 px-1 rounded' : ''"
+          >
+            <span class="text-gray-500 w-24 sm:w-32 shrink-0 truncate">{{ day.shortLabel }}</span>
+            <button
+              @click="emit('edit-weight', day.date)"
+              class="text-gray-700 w-16 sm:w-20 text-right hover:text-blue-500 hover:underline transition-colors shrink-0"
+            >{{ day.weightDisplay }}</button>
+            <button
+              @click="emit('edit-calories', day.date)"
+              class="flex-1 text-right hover:underline transition-colors"
+              :class="calorieClass(day.calories, day.target)"
+            >{{ day.calories != null ? day.calories.toLocaleString() + ' kcal' : '—' }}</button>
+            <span class="w-14 sm:w-16 text-right font-light text-gray-400 shrink-0">
+              {{ day.target != null ? '/ ' + day.target : '' }}
+            </span>
+          </div>
+        </div>
+
       </div>
     </Transition>
   </div>
@@ -81,56 +122,91 @@ const props = defineProps<{
   unit: WeightUnit
 }>()
 
-function getTargetForDate(date: string): number | null {
-  const d = new Date(date + 'T00:00:00Z')
-  const effective = props.calorieGoals.find((g) => {
-    const goalDay = new Date(g.createdAt)
-    goalDay.setUTCHours(0, 0, 0, 0)
-    return goalDay <= d
-  })
-  return effective?.targetCalories ?? null
-}
-
-type Status = 'green' | 'red' | 'gray'
-
-interface DayRow {
-  date: string
-  label: string
-  weightDisplay: string
-  calories: number | null
-  target: number | null
-}
-
-interface WeekItem {
-  year: number
-  week: number
-  key: string
-  status: Status
-  isEmpty: boolean
-  isCurrent: boolean
-  dateRange: string
-  avgCalories: number | null
-  avgWeightDisplay: string | null
-  weekTarget: number | null
-  days: DayRow[]
-}
+const DAY_LABELS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
 
 const today = new Date(new Date().toLocaleDateString('en-CA') + 'T00:00:00Z')
-const currentISOWeek = getISOWeek(today)
-const currentISOWeekYear = getISOWeekYear(today)
+const todayStr = today.toISOString().slice(0, 10)
 
-const offset = ref(-1) // -1 = current week at index 4, one future week at index 5
-const selectedIndex = ref<number>(4)
+const selectedYear = ref(today.getUTCFullYear())
+const selectedMonth = ref(today.getUTCMonth()) // 0-indexed
 
-function goBack() {
-  offset.value += 1
-  const d = new Date(new Date().toLocaleDateString('en-CA') + 'T00:00:00Z')
-  d.setUTCDate(d.getUTCDate() - (5 + offset.value) * 7)
-  const dayNum = d.getUTCDay() || 7
-  d.setUTCDate(d.getUTCDate() - (dayNum - 1))
-  emit('need-from', d.toISOString().slice(0, 10))
+const isCurrentMonth = computed(() =>
+  selectedYear.value === today.getUTCFullYear() &&
+  selectedMonth.value === today.getUTCMonth()
+)
+
+const isOnToday = computed(() =>
+  isCurrentMonth.value && selectedDay.value === todayStr
+)
+
+const currentMonthLabel = computed(() =>
+  new Date(Date.UTC(selectedYear.value, selectedMonth.value, 1))
+    .toLocaleDateString('en', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+)
+
+const selectedDay    = ref<string>(todayStr)
+const navDirection   = ref<'forward' | 'backward'>('forward')
+
+// Chip bar center — updated directly by all navigation functions
+const chipYear  = ref(today.getUTCFullYear())
+const chipMonth = ref(today.getUTCMonth())
+
+function setMonth(year: number, month: number) {
+  navDirection.value = (year * 12 + month) >= (selectedYear.value * 12 + selectedMonth.value) ? 'forward' : 'backward'
+  selectedYear.value = year
+  selectedMonth.value = month
+  chipYear.value = year
+  chipMonth.value = month
+  const currentDay = parseInt(selectedDay.value.slice(8, 10), 10)
+  const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
+  const day = Math.min(currentDay, daysInMonth)
+  selectedDay.value = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  let ey = year, em = month - 2
+  while (em < 0) { em += 12; ey-- }
+  emitNeedFrom(`${ey}-${String(em + 1).padStart(2, '0')}-01`)
 }
-function goForward() { offset.value -= 1 }
+
+function chipBarPrev() {
+  let m = chipMonth.value - 1, y = chipYear.value
+  if (m < 0) { m = 11; y-- }
+  chipYear.value = y; chipMonth.value = m
+  setMonth(y, m)
+}
+
+function chipBarNext() {
+  let m = chipMonth.value + 1, y = chipYear.value
+  if (m > 11) { m = 0; y++ }
+  chipYear.value = y; chipMonth.value = m
+  setMonth(y, m)
+}
+
+function prevMonth() {
+  let m = selectedMonth.value - 1, y = selectedYear.value
+  if (m < 0) { m = 11; y-- }
+  setMonth(y, m)
+}
+
+function nextMonth() {
+  let m = selectedMonth.value + 1, y = selectedYear.value
+  if (m > 11) { m = 0; y++ }
+  setMonth(y, m)
+}
+
+function selectMonth(year: number, month: number) {
+  setMonth(year, month)
+}
+
+function jumpToToday() {
+  setMonth(today.getUTCFullYear(), today.getUTCMonth())
+  selectedDay.value = todayStr
+}
+
+function emitNeedFrom(date: string) {
+  const oldest = props.logs.length > 0 ? props.logs[props.logs.length - 1].date : null
+  if (oldest == null || date < oldest) emit('need-from', date)
+}
+
+// ── Data helpers ────────────────────────────────────────────────────────────
 
 const logMap = computed(() => {
   const m = new Map<string, DailyLog>()
@@ -138,130 +214,242 @@ const logMap = computed(() => {
   return m
 })
 
-const dayFmt = new Intl.DateTimeFormat('en', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
-const monthDayFmt = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', timeZone: 'UTC' })
-
-const weekData = computed<WeekItem[]>(() => {
-  const now = new Date(new Date().toLocaleDateString('en-CA') + 'T00:00:00Z')
-  const weeks = Array.from({ length: 6 }, (_, i) => {
-    const d = new Date(now)
-    d.setUTCDate(now.getUTCDate() - (5 - i + offset.value) * 7)
-    return { year: getISOWeekYear(d), week: getISOWeek(d) }
+function getTargetForDate(date: string): number | null {
+  const d = new Date(date + 'T00:00:00Z')
+  const goal = props.calorieGoals.find((g) => {
+    const gDay = new Date(g.createdAt)
+    gDay.setUTCHours(0, 0, 0, 0)
+    return gDay <= d
   })
+  return goal?.targetCalories ?? null
+}
 
-  return weeks.map(({ year, week }) => {
-    const key = `${year}-W${String(week).padStart(2, '0')}`
-    const dates = getWeekDates(year, week)
+// ── Status types & computation ───────────────────────────────────────────────
 
-    const days: DayRow[] = dates.map((date) => {
+type MonthStatus = 'green' | 'red' | 'gray'
+type WeekStatus  = 'green' | 'orange' | 'red' | 'gray'
+type DayStatus   = 'green' | 'orange' | 'red' | 'gray'
+
+function computeMonthStatus(year: number, month: number): MonthStatus {
+  const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
+  let totalCalories = 0, totalTarget = 0, count = 0
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    const log = logMap.value.get(date)
+    if (log?.caloriesKcal != null) {
+      const target = log.calorieTarget ?? getTargetForDate(date)
+      if (target != null) { totalCalories += log.caloriesKcal; totalTarget += target; count++ }
+    }
+  }
+  if (count === 0) return 'gray'
+  return totalCalories <= totalTarget ? 'green' : 'red'
+}
+
+// ── Recent months chips ──────────────────────────────────────────────────────
+
+interface MonthChip {
+  year: number; month: number; label: string; key: string
+  status: MonthStatus; isSelected: boolean
+}
+
+// Show a window of 5 months centred on chipYear/chipMonth
+const recentMonthsData = computed<MonthChip[]>(() => {
+  const result: MonthChip[] = []
+  for (let i = -2; i <= 2; i++) {
+    let year  = chipYear.value
+    let month = chipMonth.value + i
+    while (month < 0)  { month += 12; year-- }
+    while (month > 11) { month -= 12; year++ }
+    result.push({
+      year, month,
+      label: new Date(Date.UTC(year, month, 1)).toLocaleDateString('en', { month: 'short', timeZone: 'UTC' }),
+      key: `${year}-${month}`,
+      status: computeMonthStatus(year, month),
+      isSelected: year === selectedYear.value && month === selectedMonth.value,
+    })
+  }
+  return result
+})
+
+// ── Calendar weeks ───────────────────────────────────────────────────────────
+
+interface DayInfo {
+  date: string; dayNum: number; isOtherMonth: boolean; isToday: boolean
+  calories: number | null; target: number | null
+  hasWeight: boolean; weightDisplay: string; weightShort: string | null
+  shortLabel: string; fullLabel: string; status: DayStatus
+}
+
+
+interface WeekData {
+  year: number; week: number; key: string; days: DayInfo[]
+  avgCalories: number | null; weekTarget: number | null; status: WeekStatus
+  avgWeightDisplay: string | null
+}
+
+const fullDayFmt  = new Intl.DateTimeFormat('en', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })
+const shortDayFmt = new Intl.DateTimeFormat('en', { weekday: 'short', day: 'numeric', timeZone: 'UTC' })
+
+const calendarWeeks = computed<WeekData[]>(() => {
+  const year = selectedYear.value
+  const month = selectedMonth.value
+  const monthStatus = computeMonthStatus(year, month)
+
+  const firstDay = new Date(Date.UTC(year, month, 1))
+
+  // Find the Monday of the first partial week
+  const firstDow = firstDay.getUTCDay() || 7
+  const cursor = new Date(firstDay)
+  cursor.setUTCDate(firstDay.getUTCDate() - (firstDow - 1))
+
+  const weeks: WeekData[] = []
+
+  // Always render exactly 6 rows so the component height never changes
+  for (let _row = 0; _row < 6; _row++) {
+    const wYear = getISOWeekYear(cursor)
+    const wNum  = getISOWeek(cursor)
+    const key   = `${wYear}-W${String(wNum).padStart(2, '0')}`
+    const dates = getWeekDates(wYear, wNum)
+
+    // Week averages (all 7 ISO days)
+    let calSum = 0, calCount = 0, wgtSum = 0, wgtCount = 0
+    for (const date of dates) {
       const log = logMap.value.get(date)
+      if (log?.caloriesKcal != null) { calSum += log.caloriesKcal; calCount++ }
+      if (log?.weightKg != null)     { wgtSum += log.weightKg;     wgtCount++ }
+    }
+    const avgCalories = calCount > 0 ? calSum / calCount : null
+    const weekTarget  = getTargetForDate(dates[3])
+    const avgWeightDisplay = wgtCount > 0
+      ? (props.unit === 'lbs' ? wgtSum / wgtCount * 2.20462 : wgtSum / wgtCount).toFixed(1)
+      : null
+
+    let wStatus: WeekStatus = 'gray'
+    if (avgCalories != null && weekTarget != null) {
+      if (avgCalories <= weekTarget) wStatus = 'green'
+      else wStatus = monthStatus === 'green' ? 'orange' : 'red'
+    }
+
+    const days: DayInfo[] = dates.map(date => {
+      const d = new Date(date + 'T00:00:00Z')
+      const isOtherMonth = d.getUTCMonth() !== month || d.getUTCFullYear() !== year
+      const log      = logMap.value.get(date)
       const calories = log?.caloriesKcal ?? null
-      const target = log?.calorieTarget ?? getTargetForDate(date)
+      const target   = log?.calorieTarget ?? getTargetForDate(date)
+
+      let dayStatus: DayStatus = 'gray'
+      if (!isOtherMonth && calories != null && target != null) {
+        if (calories <= target) dayStatus = 'green'
+        else dayStatus = (wStatus === 'green' || wStatus === 'orange') ? 'orange' : 'red'
+      }
+
       return {
-        date,
-        label: dayFmt.format(new Date(date + 'T00:00:00Z')),
+        date, dayNum: d.getUTCDate(), isOtherMonth, isToday: date === todayStr,
+        calories, target,
+        hasWeight: log?.weightKg != null,
         weightDisplay: log?.weightKg != null ? formatWeight(log.weightKg, props.unit) : '—',
-        calories,
-        target,
+        weightShort: log?.weightKg != null
+          ? (props.unit === 'lbs' ? (log.weightKg * 2.20462) : log.weightKg).toFixed(1)
+          : null,
+        shortLabel: shortDayFmt.format(d),
+        fullLabel: fullDayFmt.format(d),
+        status: dayStatus,
       }
     })
 
-    const isEmpty = days.every((d) => d.calories == null && d.weightDisplay === '—')
-    const isCurrent = year === currentISOWeekYear && week === currentISOWeek
+    weeks.push({ year: wYear, week: wNum, key, days, avgCalories: avgCalories != null ? Math.round(avgCalories) : null, weekTarget, status: wStatus, avgWeightDisplay })
+    cursor.setUTCDate(cursor.getUTCDate() + 7)
+  } // end for _row
 
-    const calorieDays = days.filter((d) => d.calories != null)
-    const avgCalories = calorieDays.length > 0
-      ? calorieDays.reduce((sum, d) => sum + d.calories!, 0) / calorieDays.length
-      : null
-
-    const weightDays = days.filter((d) => d.weightDisplay !== '—')
-    let avgWeightDisplay: string | null = null
-    if (weightDays.length > 0) {
-      const avgKg = weightDays.reduce((sum, d) => {
-        const log = logMap.value.get(d.date)
-        return sum + (log?.weightKg ?? 0)
-      }, 0) / weightDays.length
-      const value = props.unit === 'lbs' ? avgKg * 2.20462 : avgKg
-      avgWeightDisplay = `${value.toFixed(2)} ${props.unit}`
-    }
-
-    const weekMidDate = dates[3] ?? dates[0]
-    const weekTarget = getTargetForDate(weekMidDate)
-    let status: Status = 'gray'
-    if (avgCalories != null && weekTarget != null) {
-      status = avgCalories <= weekTarget ? 'green' : 'red'
-    }
-
-    const firstDate = new Date(dates[0] + 'T00:00:00Z')
-    const lastDate = new Date(dates[6] + 'T00:00:00Z')
-    const startStr = monthDayFmt.format(firstDate)
-    const endStr = firstDate.getUTCMonth() === lastDate.getUTCMonth()
-      ? lastDate.getUTCDate().toString()
-      : monthDayFmt.format(lastDate)
-    const dateRange = `${startStr}–${endStr}, ${lastDate.getUTCFullYear()}`
-
-    return {
-      year,
-      week,
-      key,
-      status,
-      isEmpty,
-      isCurrent,
-      dateRange,
-      avgCalories: avgCalories != null ? Math.round(avgCalories) : null,
-      avgWeightDisplay,
-      weekTarget,
-      days,
-    }
-  })
+  return weeks
 })
 
-const selectedWeek = computed(() => weekData.value[selectedIndex.value] ?? null)
+// ── Day / week selection ─────────────────────────────────────────────────────
 
-function toggle(index: number) {
-  selectedIndex.value = index
-}
-
-function jumpToCurrent() {
-  offset.value = -1
-  selectedIndex.value = 4
-}
-
-function chipClass(w: WeekItem, active: boolean): string {
-  if (w.isEmpty) {
-    return active
-      ? 'bg-gray-100 text-gray-500 border-2 border-gray-400'
-      : 'bg-gray-50 text-gray-400 border border-dashed border-gray-200'
+function selectDay(day: DayInfo) {
+  const d = new Date(day.date + 'T00:00:00Z')
+  const y = d.getUTCFullYear(), m = d.getUTCMonth()
+  if (y !== selectedYear.value || m !== selectedMonth.value) {
+    setMonth(y, m)
   }
+  selectedDay.value = day.date
+}
 
-  const color = w.status === 'green'
-    ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-    : w.status === 'red'
-    ? 'bg-rose-500 hover:bg-rose-600 text-white'
-    : 'bg-slate-400 hover:bg-slate-500 text-white'
+const selectedWeek = computed(() => {
+  if (!selectedDay.value) return null
+  return calendarWeeks.value.find(w => w.days.some(d => d.date === selectedDay.value)) ?? null
+})
 
-  return active ? `${color} ring-[3px] ring-offset-1 ring-gray-800` : color
+// ── CSS class helpers ────────────────────────────────────────────────────────
+
+function monthChipClass(m: MonthChip): string {
+  const sel = m.isSelected ? 'ring-2 ring-offset-1 ring-gray-700 ' : ''
+  if (m.status === 'green') return sel + 'bg-emerald-500 text-white hover:bg-emerald-600'
+  if (m.status === 'red')   return sel + 'bg-rose-500 text-white hover:bg-rose-600'
+  return sel + 'bg-gray-50 text-gray-400 border border-dashed border-gray-300 hover:bg-gray-100'
+}
+
+function weekChipClass(w: WeekData): string {
+  if (w.status === 'green')  return 'bg-emerald-500 text-white'
+  if (w.status === 'orange') return 'bg-amber-400 text-white'
+  if (w.status === 'red')    return 'bg-rose-500 text-white'
+  return 'bg-gray-100 text-gray-400'
+}
+
+function dayCellClass(day: DayInfo): string {
+  if (day.isOtherMonth) return 'text-gray-400 bg-transparent hover:bg-gray-100 cursor-pointer'
+
+  const isSelected  = selectedDay.value === day.date
+  const ring        = isSelected ? 'ring-2 ring-offset-1 ring-gray-700 relative z-10 ' : ''
+  const todayRing   = day.isToday && !isSelected ? 'ring-2 ring-blue-400 ' : ''
+
+  if (day.status === 'green')  return ring + todayRing + 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+  if (day.status === 'orange') return ring + todayRing + 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+  if (day.status === 'red')    return ring + todayRing + 'bg-rose-100 text-rose-800 hover:bg-rose-200'
+  return ring + todayRing + (day.isToday ? 'bg-blue-50 ' : 'bg-gray-50 ') + 'text-gray-600 hover:bg-gray-100'
 }
 
 function calorieClass(calories: number | null, target: number | null): string {
   if (calories == null || target == null) return 'text-gray-500'
-  return calories > target ? 'text-red-500' : 'text-emerald-500'
+  return calories > target ? 'text-rose-500' : 'text-emerald-500'
 }
 </script>
 
 <style scoped>
 @reference "../../style.css";
+
 .nav-btn {
-  @apply text-xl text-gray-400 hover:text-gray-700 w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors shrink-0;
+  @apply text-xl text-gray-400 hover:text-gray-700 w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors shrink-0 cursor-pointer;
 }
 
-.expand-enter-active,
-.expand-leave-active {
-  transition: opacity 0.15s ease, transform 0.15s ease;
+.cal-grid {
+  display: grid;
+  grid-template-columns: 2.75rem repeat(7, 1fr);
+  gap: 3px;
 }
-.expand-enter-from,
-.expand-leave-to {
-  opacity: 0;
-  transform: translateY(-4px);
+
+.week-chip {
+  @apply text-[10px] font-bold rounded-md flex flex-col items-center justify-center py-2 min-h-[4rem] select-none;
 }
+
+.day-cell {
+  @apply flex flex-col items-center justify-center rounded-lg transition-all cursor-pointer select-none py-2 min-h-[4rem];
+}
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+.fade-enter-active, .fade-leave-active { transition: opacity 0.15s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+
+.slide-forward-enter-active,
+.slide-forward-leave-active,
+.slide-backward-enter-active,
+.slide-backward-leave-active {
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+.slide-forward-enter-from  { transform: translateX(28px);  opacity: 0; }
+.slide-forward-leave-to    { transform: translateX(-28px); opacity: 0; }
+.slide-backward-enter-from { transform: translateX(-28px); opacity: 0; }
+.slide-backward-leave-to   { transform: translateX(28px);  opacity: 0; }
 </style>
