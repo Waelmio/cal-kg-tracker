@@ -122,6 +122,25 @@ const logMap = computed(() => {
   return m
 })
 
+// All weight logs regardless of range, for 7-day lookback
+const allWeightMap = computed(() => {
+  const m = new Map<string, number>()
+  for (const l of props.logs) if (l.weightKg != null) m.set(l.date, l.weightKg)
+  return m
+})
+
+function sliding7DayAvgKg(date: string): number | null {
+  const end = new Date(date + 'T00:00:00Z')
+  let sum = 0, count = 0
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(end)
+    d.setUTCDate(end.getUTCDate() - i)
+    const w = allWeightMap.value.get(d.toISOString().slice(0, 10))
+    if (w != null) { sum += w; count++ }
+  }
+  return count > 0 ? sum / count : null
+}
+
 function weeklyDates(from: string, to: string): string[] {
   const result: string[] = []
   const d = new Date(from + 'T00:00:00Z')
@@ -178,8 +197,9 @@ const chartData = computed(() => {
   const labels = allDates.value.map(fmt)
 
   const weightData = allDates.value.map((date) => {
-    const w = logMap.value.get(date)
-    return w != null ? displayWeight(w, props.unit) : null
+    if (!logMap.value.has(date)) return null
+    const avg = sliding7DayAvgKg(date)
+    return avg != null ? displayWeight(avg, props.unit) : null
   })
 
   const datasets: ChartDataset<'line'>[] = [{
@@ -230,8 +250,8 @@ const chartData = computed(() => {
     const lastLog = weightLogs.value.at(-1)!
     const startDate = lastLog.date
     const targetDate = props.goal.targetDate
-    const startW = displayWeight(lastLog.weightKg!, props.unit)
-    const displayKgPerDay = displayWeight(tdaeDailyKgChange.value, props.unit) - displayWeight(0, props.unit)
+    const startW = displayWeight(sliding7DayAvgKg(startDate) ?? lastLog.weightKg!, props.unit)
+    const displayKgPerDay = props.unit === 'lbs' ? tdaeDailyKgChange.value * 2.20462 : tdaeDailyKgChange.value
     const startMs = new Date(startDate).getTime()
 
     const tdeeData = allDates.value.map((date) => {

@@ -26,20 +26,24 @@ public class DashboardService(AppDbContext db, ICalorieLogService calorieLogServ
         var settings = await db.UserSettings.FirstAsync();
         var weightGoal = await db.Goals.OrderByDescending(g => g.CreatedAt).FirstOrDefaultAsync();
 
-        // Single enriched load: all logs up to today, each paired with the active goal on that date.
-        var allEnriched = await calorieLogService.GetEnrichedAsync(to: now);
-        var allLogs = allEnriched.Select(e => e.Log).ToList();
-
         var daysFromMonday = ((int)now.DayOfWeek + 6) % 7;
         var weekStart = now.AddDays(-daysFromMonday);
-        var weekEnriched = allEnriched.Where(e => e.Log.Date >= weekStart && e.Log.CaloriesKcal != null).ToList();
+        var weekEnd = weekStart.AddDays(6);
+
+        // Load enriched logs up to the later of: end of current week, or goal target date (to include future logged days).
+        var loadTo = weightGoal is not null && weightGoal.TargetDate > weekEnd ? weightGoal.TargetDate : weekEnd;
+        var allEnrichedWithFuture = await calorieLogService.GetEnrichedAsync(to: loadTo);
+        var allEnriched = allEnrichedWithFuture.Where(e => e.Log.Date <= now).ToList();
+        var allLogs = allEnriched.Select(e => e.Log).ToList();
+
+        var weekEnriched = allEnrichedWithFuture.Where(e => e.Log.Date >= weekStart && e.Log.Date <= weekEnd && e.Log.CaloriesKcal != null).ToList();
 
         var todayEnriched = allEnriched.FirstOrDefault(e => e.Log.Date == now);
         var currentWeight = allLogs.FirstOrDefault(l => l.WeightKg != null)?.WeightKg;
 
         var weight = CalcWeightStats(allLogs, now);
         var weekly = CalcWeeklyCalorieStats(weekEnriched);
-        var (overallCalorieDeficit, overallCalorieDeficitDays) = CalcOverallCalorieDeficit(allEnriched, weightGoal);
+        var (overallCalorieDeficit, overallCalorieDeficitDays) = CalcOverallCalorieDeficit(allEnrichedWithFuture, weightGoal);
         var (progressPercent, kgToGoal, projectedDate) = CalcGoalProgress(weightGoal, weight.Avg7Days, currentWeight, weight.PointShift7Days, now);
         var (calorieStreakDays, calorieStreakNextDays, caloriesExcessOverStreak) = CalcCalorieStreak(allEnriched);
 
@@ -143,7 +147,7 @@ public class DashboardService(AppDbContext db, ICalorieLogService calorieLogServ
     {
         if (goal is null) return (null, 0);
         var goalLogs = allLogs
-            .Where(e => e.Log.Date >= goal.StartDate && e.Log.CaloriesKcal != null && e.EffectiveTarget.HasValue)
+            .Where(e => e.Log.Date >= goal.StartDate && e.Log.Date <= goal.TargetDate && e.Log.CaloriesKcal != null && e.EffectiveTarget.HasValue)
             .ToList();
         if (goalLogs.Count == 0) return (null, 0);
         var deficit = goalLogs.Sum(e => e.EffectiveTarget!.Value - e.Log.CaloriesKcal!.Value);

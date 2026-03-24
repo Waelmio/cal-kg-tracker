@@ -18,25 +18,6 @@
         class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-600 focus:outline-hidden focus:ring-2 focus:ring-primary-500" />
     </div>
 
-    <!-- Cheat Day toggle -->
-    <div class="bg-white rounded-xl border p-4 flex items-center justify-between"
-      :class="log?.isCheatDay ? 'border-orange-300 bg-orange-50' : 'border-gray-200'">
-      <div>
-        <p class="text-sm font-semibold" :class="log?.isCheatDay ? 'text-orange-700' : 'text-gray-700'">
-          Cheat Day
-        </p>
-        <p class="text-xs mt-0.5" :class="log?.isCheatDay ? 'text-orange-500' : 'text-gray-400'">
-          {{ log?.isCheatDay ? 'Target set to TDEE for today' : 'Mark this day as a cheat day — target becomes TDEE' }}
-        </p>
-      </div>
-      <button @click="onToggleCheatDay"
-        class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none"
-        :class="log?.isCheatDay ? 'bg-orange-400' : 'bg-gray-200'">
-        <span class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200"
-          :class="log?.isCheatDay ? 'translate-x-5' : 'translate-x-0'" />
-      </button>
-    </div>
-
     <div class="grid sm:grid-cols-2 gap-4">
       <!-- Weight card -->
       <div class="bg-white rounded-xl border border-gray-200 p-5">
@@ -194,8 +175,8 @@ function openModal(type: 'weight' | 'calories', date: string) {
   activeModal.value = type
 }
 
-async function onSaved() {
-  await dailyLogStore.fetchAll()
+function onSaved() {
+  // log store already updated in-place by upsert/delete actions
 }
 
 async function confirmRemoveWeight() {
@@ -208,10 +189,6 @@ async function confirmRemoveCalories() {
   if (confirm('Remove calories for this day?')) {
     await dailyLogStore.deleteCalories(selectedDate.value)
   }
-}
-
-async function onToggleCheatDay() {
-  await dailyLogStore.toggleCheatDay(selectedDate.value, !log.value?.isCheatDay)
 }
 
 async function confirmDelete(entry: DailyLog) {
