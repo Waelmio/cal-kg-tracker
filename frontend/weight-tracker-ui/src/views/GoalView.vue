@@ -17,7 +17,7 @@
       </div>
       <p v-if="requiredWeeklyLoss" class="text-sm mt-3"
         :class="goalOnTrack === true ? 'text-green-600' : goalOnTrack === false ? 'text-red-500' : 'text-gray-500'">
-        Requires losing <span class="font-medium">{{ requiredWeeklyLoss }} {{ unit }}/week</span>
+        Requires losing <span class="font-medium">{{ requiredWeeklyLoss }} {{ unit }}/week</span> (−<span class="font-medium">{{ requiredDailyDeficit }} kcal/day</span> deficit)
       </p>
       <p v-if="store.goal.notes" class="text-sm text-gray-500 mt-3 italic">{{ store.goal.notes }}</p>
       <div v-if="dashboard.data?.bmi" class="mt-3 pt-3 border-t border-primary-100 grid grid-cols-3 items-center">
@@ -198,9 +198,15 @@
           <input v-model.number="targetDisplay" type="number" step="0.1" min="1" max="700"
             class="input" required :placeholder="`e.g. ${unit === 'kg' ? '70' : '154'}`" />
         </div>
-        <div>
-          <label class="label">Target Date</label>
-          <input v-model="targetDate" type="date" class="input" required :min="tomorrow" />
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="label">Start Date</label>
+            <input v-model="startDate" type="date" class="input" required :max="today" />
+          </div>
+          <div>
+            <label class="label">Target Date</label>
+            <input v-model="targetDate" type="date" class="input" required :min="tomorrow" />
+          </div>
         </div>
         <div>
           <label class="label">Notes (optional)</label>
@@ -221,7 +227,7 @@ import { useGoalsStore } from '../stores/goals'
 import { useDashboardStore } from '../stores/dashboard'
 import { useSettingsStore } from '../stores/settings'
 import { useCalorieGoalsStore } from '../stores/calorieGoals'
-import { toKg, formatWeight, bmiLabel } from '../utils/units'
+import { toKg, formatWeight, bmiLabel, displayWeight } from '../utils/units'
 import { getComputedTdee } from '../api/tdee'
 import type { TdeeComputation } from '../types'
 
@@ -263,7 +269,7 @@ const projectionVsWeeklyAvg = computed(() => {
 
 const requiredWeeklyLossKg = computed<number | null>(() => {
   const goal = store.goal
-  const currentWeight = dashboard.data?.currentWeightKg
+  const currentWeight = dashboard.data?.avgWeight7Days ?? dashboard.data?.currentWeightKg
   if (!goal || currentWeight == null) return null
   const remaining = currentWeight - goal.targetWeightKg
   if (remaining <= 0) return null
@@ -280,6 +286,11 @@ const requiredWeeklyLoss = computed(() => {
     : requiredWeeklyLossKg.value.toFixed(2)
 })
 
+const requiredDailyDeficit = computed(() => {
+  if (requiredWeeklyLossKg.value == null) return null
+  return Math.round(requiredWeeklyLossKg.value * 7700 / 7)
+})
+
 const goalBmi = computed<number | null>(() => {
   const h = settingsStore.settings.heightCm
   const targetKg = store.goal?.targetWeightKg
@@ -293,9 +304,11 @@ const goalOnTrack = computed<boolean | null>(() => {
   return projectionVsTdee.value.kgPerWeek >= requiredWeeklyLossKg.value
 })
 
+const today = new Date().toISOString().split('T')[0]
 const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0]
 const targetDisplay = ref<number | ''>('')
 const targetDate = ref(tomorrow)
+const startDate = ref(today)
 const notes = ref('')
 const saving = ref(false)
 const error = ref('')
@@ -360,10 +373,13 @@ async function submit() {
     await store.create({
       targetWeightKg: toKg(Number(targetDisplay.value), unit.value),
       targetDate: targetDate.value,
+      startDate: startDate.value || undefined,
       notes: notes.value || undefined,
     })
     await dashboard.fetch()
     targetDisplay.value = ''
+    targetDate.value = tomorrow
+    startDate.value = today
     notes.value = ''
   } catch (e) {
     error.value = (e as Error).message
@@ -377,5 +393,11 @@ onMounted(async () => {
   await Promise.all([store.fetchActive(), dashboard.fetch()])
   calorieTargetInput.value = calorieGoalsStore.goals[0]?.targetCalories ?? ''
   tdeeInput.value = settingsStore.settings.tdeeKcal ?? ''
+  if (store.goal) {
+    targetDisplay.value = displayWeight(store.goal.targetWeightKg, unit.value)
+    targetDate.value = store.goal.targetDate
+    startDate.value = store.goal.startDate
+    notes.value = store.goal.notes ?? ''
+  }
 })
 </script>

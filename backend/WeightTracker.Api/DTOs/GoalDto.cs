@@ -14,4 +14,5 @@ public record GoalDto(
 public record CreateGoalDto(
     [Range(1, 700)] decimal TargetWeightKg,
     DateOnly TargetDate,
+    DateOnly? StartDate,
     [MaxLength(500)] string? Notes);

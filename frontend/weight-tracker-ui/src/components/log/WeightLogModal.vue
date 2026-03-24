@@ -3,7 +3,7 @@
     <div class="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
       <div class="flex items-center justify-between mb-5">
         <h2 class="text-lg font-semibold text-gray-800">Log Weight</h2>
-        <button @click="$emit('close')" class="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+        <button @click="$emit('close')" class="text-gray-400 hover:text-gray-600 text-xl leading-none cursor-pointer">✕</button>
       </div>
 
       <form @submit.prevent="save" class="space-y-4">
@@ -19,11 +19,11 @@
         <div v-if="existing?.weightKg != null" class="flex items-center justify-between">
           <p class="text-xs text-gray-400">Current: {{ formatWeight(existing.weightKg, unit) }}</p>
           <button type="button" @click="removeWeight"
-            class="text-xs text-red-400 hover:text-red-600 hover:underline">
+            class="text-xs text-red-400 hover:text-red-600 hover:underline cursor-pointer">
             Remove weigh-in
           </button>
         </div>
-        <button type="submit" class="btn-primary w-full" :disabled="saving || !weightDisplay">
+        <button type="submit" class="btn-primary w-full cursor-pointer" :disabled="saving || !weightDisplay">
           {{ saving ? 'Saving…' : 'Save' }}
         </button>
         <p v-if="error" class="text-red-500 text-sm">{{ error }}</p>
@@ -35,7 +35,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useDailyLogStore } from '../../stores/dailyLog'
-import { useDashboardStore } from '../../stores/dashboard'
 import { useSettingsStore } from '../../stores/settings'
 import { toKg, displayWeight, formatWeight } from '../../utils/units'
 import type { DailyLog } from '../../types'
@@ -45,7 +44,6 @@ const props = defineProps<{ initialDate?: string }>()
 const emit = defineEmits<{ close: []; saved: [] }>()
 
 const store = useDailyLogStore()
-const dashboard = useDashboardStore()
 const settingsStore = useSettingsStore()
 const unit = computed(() => settingsStore.settings.preferredUnit)
 
@@ -78,7 +76,6 @@ async function save() {
       date: date.value,
       weightKg: toKg(Number(weightDisplay.value), unit.value),
     })
-    await dashboard.fetch()
     emit('saved')
     emit('close')
   } catch (e) {
@@ -91,7 +88,6 @@ async function save() {
 async function removeWeight() {
   if (confirm('Remove this weigh-in?')) {
     await store.deleteWeight(date.value)
-    await dashboard.fetch()
     emit('saved')
     emit('close')
   }

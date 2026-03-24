@@ -8,8 +8,8 @@
       </div>
     </div>
 
-    <!-- Skeleton -->
-    <div v-if="dashboard.loading" class="grid grid-cols-2 gap-3">
+    <!-- Skeleton (initial load only) -->
+    <div v-if="dashboard.loading && !dashboard.data" class="grid grid-cols-2 gap-3">
       <div v-for="i in 4" :key="i" class="bg-gray-100 animate-pulse h-20 rounded-xl" />
     </div>
 
@@ -73,6 +73,7 @@
         :logs="logStore.logs"
         :calorie-goals="calorieGoalsStore.goals"
         :unit="unit"
+        :goal="dashboard.data.activeGoal"
         @need-from="onNeedFrom"
         @edit-weight="date => { editDate = date; showWeight = true }"
         @edit-calories="date => { editDate = date; showCalories = true }" />
@@ -210,7 +211,7 @@ function streakNextLabel(data: DashboardData): string | undefined {
 }
 
 async function onSaved() {
-  await Promise.all([logStore.fetchAll({ limit: 70 }), dashboard.fetch()])
+  await dashboard.fetch()
 }
 
 async function onChartNeedFrom(from: string | null) {
@@ -234,9 +235,13 @@ async function onNeedFrom(from: string) {
 }
 
 onMounted(async () => {
+  const d = new Date()
+  d.setMonth(d.getMonth() - 4)
+  d.setDate(1)
+  const from = d.toISOString().slice(0, 10)
   await Promise.all([
     dashboard.fetch(),
-    logStore.fetchAll({ limit: 70 }),
+    logStore.fetchAll({ from }),
   ])
 })
 </script>

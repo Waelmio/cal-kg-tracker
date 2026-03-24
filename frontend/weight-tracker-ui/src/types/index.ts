@@ -86,5 +86,6 @@ export interface UpsertDailyLogRequest {
 export interface CreateGoalRequest {
   targetWeightKg: number
   targetDate: string
+  startDate?: string
   notes?: string
 }

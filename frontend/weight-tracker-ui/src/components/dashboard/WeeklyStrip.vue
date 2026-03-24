@@ -68,7 +68,7 @@
         <!-- Legend -->
         <div class="flex items-center gap-3 mt-3 text-[10px] text-gray-400">
           <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-emerald-400 inline-block" />Under target</span>
-          <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-amber-400 inline-block" />Over week, month ok</span>
+          <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-amber-400 inline-block" />Over target, avg ok</span>
           <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-rose-400 inline-block" />Over target</span>
         </div>
 
@@ -106,7 +106,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import type { DailyLog, CalorieGoal, WeightUnit } from '../../types'
+import type { DailyLog, CalorieGoal, Goal, WeightUnit } from '../../types'
 import { formatWeight } from '../../utils/units'
 import { getISOWeek, getISOWeekYear, getWeekDates } from '../../utils/weeks'
 
@@ -120,6 +120,7 @@ const props = defineProps<{
   logs: DailyLog[]
   calorieGoals: CalorieGoal[]
   unit: WeightUnit
+  goal?: Goal | null
 }>()
 
 const DAY_LABELS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
@@ -230,19 +231,28 @@ type MonthStatus = 'green' | 'red' | 'gray'
 type WeekStatus  = 'green' | 'orange' | 'red' | 'gray'
 type DayStatus   = 'green' | 'orange' | 'red' | 'gray'
 
-function computeMonthStatus(year: number, month: number): MonthStatus {
+function computeMonthStatus(year: number, month: number, goalFiltered = false): MonthStatus {
   const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
+  const goal = props.goal
   let totalCalories = 0, totalTarget = 0, count = 0
+  let goalCalories = 0, goalTarget = 0, goalCount = 0
   for (let d = 1; d <= daysInMonth; d++) {
     const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
     const log = logMap.value.get(date)
     if (log?.caloriesKcal != null) {
       const target = log.calorieTarget ?? getTargetForDate(date)
-      if (target != null) { totalCalories += log.caloriesKcal; totalTarget += target; count++ }
+      if (target != null) {
+        totalCalories += log.caloriesKcal; totalTarget += target; count++
+        if (goal && date >= goal.startDate && date <= goal.targetDate) {
+          goalCalories += log.caloriesKcal; goalTarget += target; goalCount++
+        }
+      }
     }
   }
-  if (count === 0) return 'gray'
-  return totalCalories <= totalTarget ? 'green' : 'red'
+  const useGoal = goalFiltered && goalCount > 0
+  const [cal, tgt, cnt] = useGoal ? [goalCalories, goalTarget, goalCount] : [totalCalories, totalTarget, count]
+  if (cnt === 0) return 'gray'
+  return cal <= tgt ? 'green' : 'red'
 }
 
 // ── Recent months chips ──────────────────────────────────────────────────────
@@ -264,7 +274,7 @@ const recentMonthsData = computed<MonthChip[]>(() => {
       year, month,
       label: new Date(Date.UTC(year, month, 1)).toLocaleDateString('en', { month: 'short', timeZone: 'UTC' }),
       key: `${year}-${month}`,
-      status: computeMonthStatus(year, month),
+      status: computeMonthStatus(year, month, true),
       isSelected: year === selectedYear.value && month === selectedMonth.value,
     })
   }
@@ -290,6 +300,7 @@ interface WeekData {
 const fullDayFmt  = new Intl.DateTimeFormat('en', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })
 const shortDayFmt = new Intl.DateTimeFormat('en', { weekday: 'short', day: 'numeric', timeZone: 'UTC' })
 
+
 const calendarWeeks = computed<WeekData[]>(() => {
   const year = selectedYear.value
   const month = selectedMonth.value
@@ -311,14 +322,22 @@ const calendarWeeks = computed<WeekData[]>(() => {
     const key   = `${wYear}-W${String(wNum).padStart(2, '0')}`
     const dates = getWeekDates(wYear, wNum)
 
-    // Week averages (all 7 ISO days)
+    // Week averages: track all days + goal-range days separately.
+    // Goal-range subset is used for the chip colour; all days drive the orange/red logic (via monthStatus).
     let calSum = 0, calCount = 0, wgtSum = 0, wgtCount = 0
+    let goalCalSum = 0, goalCalCount = 0
     for (const date of dates) {
       const log = logMap.value.get(date)
-      if (log?.caloriesKcal != null) { calSum += log.caloriesKcal; calCount++ }
-      if (log?.weightKg != null)     { wgtSum += log.weightKg;     wgtCount++ }
+      if (log?.caloriesKcal != null) {
+        calSum += log.caloriesKcal; calCount++
+        const g = props.goal
+        if (g && date >= g.startDate && date <= g.targetDate) { goalCalSum += log.caloriesKcal; goalCalCount++ }
+      }
+      if (log?.weightKg != null) { wgtSum += log.weightKg; wgtCount++ }
     }
-    const avgCalories = calCount > 0 ? calSum / calCount : null
+    const chipCalSum   = goalCalCount > 0 ? goalCalSum   : calSum
+    const chipCalCount = goalCalCount > 0 ? goalCalCount : calCount
+    const avgCalories = chipCalCount > 0 ? chipCalSum / chipCalCount : null
     const weekTarget  = getTargetForDate(dates[3])
     const avgWeightDisplay = wgtCount > 0
       ? (props.unit === 'lbs' ? wgtSum / wgtCount * 2.20462 : wgtSum / wgtCount).toFixed(1)
@@ -382,18 +401,37 @@ const selectedWeek = computed(() => {
 
 // ── CSS class helpers ────────────────────────────────────────────────────────
 
+function isOutsideGoal(date: string): boolean {
+  if (!props.goal) return false
+  return date < props.goal.startDate || date > props.goal.targetDate
+}
+
+function isMonthOutsideGoal(year: number, month: number): boolean {
+  if (!props.goal) return false
+  const firstDay = `${year}-${String(month + 1).padStart(2, '0')}-01`
+  const lastDay  = `${year}-${String(month + 1).padStart(2, '0')}-${new Date(Date.UTC(year, month + 1, 0)).getUTCDate()}`
+  return lastDay < props.goal.startDate || firstDay > props.goal.targetDate
+}
+
+function isWeekOutsideGoal(w: WeekData): boolean {
+  if (!props.goal) return false
+  return w.days[6].date < props.goal.startDate || w.days[0].date > props.goal.targetDate
+}
+
 function monthChipClass(m: MonthChip): string {
-  const sel = m.isSelected ? 'ring-2 ring-offset-1 ring-gray-700 ' : ''
-  if (m.status === 'green') return sel + 'bg-emerald-500 text-white hover:bg-emerald-600'
-  if (m.status === 'red')   return sel + 'bg-rose-500 text-white hover:bg-rose-600'
+  const sel   = m.isSelected ? 'ring-2 ring-offset-1 ring-gray-700 ' : ''
+  const faded = isMonthOutsideGoal(m.year, m.month)
+  if (m.status === 'green') return sel + (faded ? 'bg-emerald-200 text-emerald-400 hover:bg-emerald-300' : 'bg-emerald-500 text-white hover:bg-emerald-600')
+  if (m.status === 'red')   return sel + (faded ? 'bg-rose-200 text-rose-400 hover:bg-rose-300'         : 'bg-rose-500 text-white hover:bg-rose-600')
   return sel + 'bg-gray-50 text-gray-400 border border-dashed border-gray-300 hover:bg-gray-100'
 }
 
 function weekChipClass(w: WeekData): string {
-  if (w.status === 'green')  return 'bg-emerald-500 text-white'
-  if (w.status === 'orange') return 'bg-amber-400 text-white'
-  if (w.status === 'red')    return 'bg-rose-500 text-white'
-  return 'bg-gray-100 text-gray-400'
+  const faded = isWeekOutsideGoal(w)
+  if (w.status === 'green')  return faded ? 'bg-emerald-200 text-emerald-400' : 'bg-emerald-500 text-white'
+  if (w.status === 'orange') return faded ? 'bg-amber-200 text-amber-400'     : 'bg-amber-400 text-white'
+  if (w.status === 'red')    return faded ? 'bg-rose-200 text-rose-400'       : 'bg-rose-500 text-white'
+  return faded ? 'bg-gray-50 text-gray-300' : 'bg-gray-100 text-gray-400'
 }
 
 function dayCellClass(day: DayInfo): string {
@@ -402,10 +440,12 @@ function dayCellClass(day: DayInfo): string {
   const isSelected  = selectedDay.value === day.date
   const ring        = isSelected ? 'ring-2 ring-offset-1 ring-gray-700 relative z-10 ' : ''
   const todayRing   = day.isToday && !isSelected ? 'ring-2 ring-blue-400 ' : ''
+  const faded       = isOutsideGoal(day.date)
 
-  if (day.status === 'green')  return ring + todayRing + 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-  if (day.status === 'orange') return ring + todayRing + 'bg-amber-100 text-amber-800 hover:bg-amber-200'
-  if (day.status === 'red')    return ring + todayRing + 'bg-rose-100 text-rose-800 hover:bg-rose-200'
+  if (day.status === 'green')  return ring + todayRing + (faded ? 'bg-emerald-50 text-emerald-300 hover:bg-emerald-100' : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200')
+  if (day.status === 'orange') return ring + todayRing + (faded ? 'bg-amber-50 text-amber-300 hover:bg-amber-100'       : 'bg-amber-100 text-amber-800 hover:bg-amber-200')
+  if (day.status === 'red')    return ring + todayRing + (faded ? 'bg-rose-50 text-rose-300 hover:bg-rose-100'           : 'bg-rose-100 text-rose-800 hover:bg-rose-200')
+  if (faded) return ring + todayRing + 'bg-gray-50 text-gray-400 hover:bg-gray-100'
   return ring + todayRing + (day.isToday ? 'bg-blue-50 ' : 'bg-gray-50 ') + 'text-gray-600 hover:bg-gray-100'
 }
 
