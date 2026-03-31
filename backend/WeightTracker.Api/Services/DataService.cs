@@ -36,6 +36,7 @@ public class DataService(AppDbContext db) : IDataService
                 WeightKg = log.WeightKg,
                 CaloriesKcal = log.CaloriesKcal,
                 Notes = log.Notes,
+                IsCheatDay = log.IsCheatDay,
                 CreatedAt = log.CreatedAt,
                 UpdatedAt = log.UpdatedAt,
             });

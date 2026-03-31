@@ -32,5 +32,7 @@ public record DashboardDto(
     decimal? WeightChangeRateKgPerWeek,
     int? WeeklyCalorieDeficit,
     int WeeklyCalorieDeficitDays,
+    int? WeeklyCalorieDeficitVsTdee,
     int? OverallCalorieDeficit,
+    int? OverallCalorieDeficitVsTarget,
     int OverallCalorieDeficitDays);

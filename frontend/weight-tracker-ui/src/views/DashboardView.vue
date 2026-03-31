@@ -115,8 +115,8 @@ import CalorieBar from '../components/dashboard/CalorieBar.vue'
 import ProgressCard from '../components/dashboard/ProgressCard.vue'
 import WeightChart from '../components/dashboard/WeightChart.vue'
 import WeeklyStrip from '../components/dashboard/WeeklyStrip.vue'
-import WeightLogModal from '../components/log/WeightLogModal.vue'
-import CaloriesLogModal from '../components/log/CaloriesLogModal.vue'
+import WeightLogModal from '../components/LogModals/WeightLogModal.vue'
+import CaloriesLogModal from '../components/LogModals/CaloriesLogModal.vue'
 
 const dashboard = useDashboardStore()
 const logStore = useDailyLogStore()
@@ -128,25 +128,12 @@ const showWeight = ref(false)
 const showCalories = ref(false)
 const editDate = ref<string | undefined>(undefined)
 
-const tdeeWeeklyDeficit = computed(() => {
-  const d = dashboard.data
-  if (d == null) return null
-  const { weeklyCalorieDeficit, weeklyCalorieDeficitDays, dailyCalorieTarget } = d
-  const tdee = settingsStore.settings.tdeeKcal
-  if (weeklyCalorieDeficit == null || !weeklyCalorieDeficitDays || dailyCalorieTarget == null || tdee == null) return null
-  const weeklySum = weeklyCalorieDeficitDays * dailyCalorieTarget - weeklyCalorieDeficit
-  return weeklyCalorieDeficitDays * tdee - weeklySum
-})
+const tdeeWeeklyDeficit = computed(() => dashboard.data?.weeklyCalorieDeficitVsTdee ?? null)
 
 const overallGoalDeficit = computed(() => {
   const d = dashboard.data
-  if (d == null || d.overallCalorieDeficit == null || !d.overallCalorieDeficitDays || d.dailyCalorieTarget == null) return null
-  const tdee = settingsStore.settings.tdeeKcal
-  const vsTarget = d.overallCalorieDeficit
-  // Reconstruct actual calories consumed to compute vs-TDEE variant
-  const actualSum = d.overallCalorieDeficitDays * d.dailyCalorieTarget - vsTarget
-  const vsTdee = tdee != null ? Math.round(d.overallCalorieDeficitDays * tdee - actualSum) : null
-  return { vsTarget, vsTdee }
+  if (d == null || d.overallCalorieDeficit == null || !d.overallCalorieDeficitDays) return null
+  return { vsTarget: d.overallCalorieDeficitVsTarget, vsTdee: d.overallCalorieDeficit }
 })
 
 const overallDeficitSubHtml = computed(() => {
@@ -155,7 +142,7 @@ const overallDeficitSubHtml = computed(() => {
   const primary = d.vsTdee ?? d.vsTarget
   const kgEquiv = displayWeight(Math.abs(primary) / 7700, unit.value).toFixed(2)
   const kgPart = `≈ <span class='${deficitClass(primary)}'>${kgEquiv} ${unit.value} ${primary >= 0 ? 'loss' : 'gain'}</span>`
-  const targetPart = d.vsTdee != null
+  const targetPart = d.vsTdee != null && d.vsTarget != null
     ? ` or <span class='${deficitClass(d.vsTarget)}'>${d.vsTarget >= 0 ? '-' : '+'}${Math.abs(d.vsTarget).toLocaleString()} kcal</span> vs target`
     : ''
   return kgPart + targetPart

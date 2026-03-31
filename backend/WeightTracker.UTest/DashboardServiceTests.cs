@@ -310,23 +310,66 @@ public class DashboardServiceTests
         Assert.Equal(200, result.WeeklyCalorieDeficit);
     }
 
+    [Fact]
+    public async Task GetAsync_WeeklyCalorieDeficitVsTdee_UsesTdeeBaseline_NotDailyTarget()
+    {
+        // Ensures the vs-TDEE weekly deficit is computed from TDEE directly, not
+        // reconstructed via dailyCalorieTarget (which is wrong on cheat days or when target changes).
+        using var db = CreateDb();
+        await SeedSettingsAsync(db, tdeeKcal: 2500);
+        db.CalorieGoals.Add(new CalorieGoal
+        {
+            TargetCalories = 1800,
+            CreatedAt = Today.AddDays(-7).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)
+        });
+        // Cheat day: effectiveTarget = TDEE (2500); regular day: effectiveTarget = 1800
+        // vsTdee for cheat day:   2500 − 2300 = 200
+        // vsTdee for regular day: 2500 − 1500 = 1000
+        // Total vsTdee = 1200  (not 2500−1800 + 2500−2300 computed via target reconstruction)
+        var weekDay = WeekStart();
+        db.DailyLogs.AddRange(
+            new DailyLog { Date = weekDay, CaloriesKcal = 2300, IsCheatDay = true },
+            new DailyLog { Date = weekDay.AddDays(1), CaloriesKcal = 1500 }
+        );
+        await db.SaveChangesAsync();
+
+        var result = await CreateService(db).GetAsync(Today);
+
+        Assert.Equal(1200, result.WeeklyCalorieDeficitVsTdee);
+        // vs-target deficit: cheat day uses TDEE (2500−2300=200) + regular (1800−1500=300) = 500
+        Assert.Equal(500, result.WeeklyCalorieDeficit);
+    }
+
+    [Fact]
+    public async Task GetAsync_WeeklyCalorieDeficitVsTdee_IsNull_WhenNoTdeeSet()
+    {
+        using var db = CreateDb();
+        await SeedSettingsAsync(db); // no TDEE
+        db.CalorieGoals.Add(new CalorieGoal
+        {
+            TargetCalories = 1800,
+            CreatedAt = Today.AddDays(-7).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)
+        });
+        db.DailyLogs.Add(new DailyLog { Date = Today, CaloriesKcal = 1500 });
+        await db.SaveChangesAsync();
+
+        var result = await CreateService(db).GetAsync(Today);
+
+        Assert.Null(result.WeeklyCalorieDeficitVsTdee);
+    }
+
     // ── Overall calorie deficit ───────────────────────────────────────────────
 
     [Fact]
-    public async Task GetAsync_OverallCalorieDeficit_SumsSinceWeightGoalStartDate()
+    public async Task GetAsync_OverallCalorieDeficit_SumsTdeeMinusActualSinceGoalStartDate()
     {
         using var db = CreateDb();
-        await SeedSettingsAsync(db);
+        await SeedSettingsAsync(db, tdeeKcal: 2000);
         db.Goals.Add(new Goal
         {
             TargetWeightKg = 70m,
             TargetDate = Today.AddDays(90),
             StartDate = Today.AddDays(-7)
-        });
-        db.CalorieGoals.Add(new CalorieGoal
-        {
-            TargetCalories = 2000,
-            CreatedAt = Today.AddDays(-8).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)
         });
         db.DailyLogs.AddRange(
             new DailyLog { Date = Today.AddDays(-5), CaloriesKcal = 1500 },  // deficit 500 ✓
@@ -345,8 +388,7 @@ public class DashboardServiceTests
     public async Task GetAsync_OverallCalorieDeficit_IsNull_WhenNoWeightGoal()
     {
         using var db = CreateDb();
-        await SeedSettingsAsync(db);
-        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 2000, CreatedAt = DateTimeOffset.UtcNow.AddDays(-1) });
+        await SeedSettingsAsync(db, tdeeKcal: 2000);
         db.DailyLogs.Add(new DailyLog { Date = Today.AddDays(-1), CaloriesKcal = 1500 });
         await db.SaveChangesAsync();
 
@@ -356,46 +398,85 @@ public class DashboardServiceTests
     }
 
     [Fact]
-    public async Task GetAsync_OverallCalorieDeficit_IsNull_WhenNoCalorieGoalExistedForThoseLogs()
+    public async Task GetAsync_OverallCalorieDeficit_IsNull_WhenNoTdeeSet()
     {
         using var db = CreateDb();
-        await SeedSettingsAsync(db);
+        await SeedSettingsAsync(db); // no TDEE
         db.Goals.Add(new Goal { TargetWeightKg = 70m, TargetDate = Today.AddDays(90), StartDate = Today.AddDays(-7) });
-        // No CalorieGoal seeded — EffectiveTarget will be null for all logs
         db.DailyLogs.Add(new DailyLog { Date = Today.AddDays(-3), CaloriesKcal = 1500 });
         await db.SaveChangesAsync();
 
         var result = await CreateService(db).GetAsync(Today);
 
-        Assert.Null(result.OverallCalorieDeficit);
-        Assert.Equal(0, result.OverallCalorieDeficitDays);
+        Assert.Null(result.OverallCalorieDeficit);       // no TDEE → vsTdee is null
+        Assert.Null(result.OverallCalorieDeficitVsTarget); // no calorie goal → vsTarget is null
+        Assert.Equal(1, result.OverallCalorieDeficitDays); // 1 log exists in the goal period
     }
 
     [Fact]
-    public async Task GetAsync_OverallCalorieDeficit_UsesHistoricalGoalPerDate_NotCurrentGoal()
+    public async Task GetAsync_OverallCalorieDeficit_UnchangedWhenCalorieGoalChanges()
     {
+        // Changing the calorie goal target must not affect the overall deficit —
+        // it is always TDEE minus actual calories.
         using var db = CreateDb();
-        await SeedSettingsAsync(db);
+        await SeedSettingsAsync(db, tdeeKcal: 2000);
         db.Goals.Add(new Goal { TargetWeightKg = 70m, TargetDate = Today.AddDays(90), StartDate = Today.AddDays(-10) });
-        // Goal A (2000 kcal) was active first; Goal B (1500 kcal) replaced it 3 days ago.
-        db.CalorieGoals.AddRange(
-            new CalorieGoal { TargetCalories = 2000, CreatedAt = Today.AddDays(-10).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) },
-            new CalorieGoal { TargetCalories = 1500, CreatedAt = Today.AddDays(-3).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) }
-        );
         db.DailyLogs.AddRange(
-            // 7 days ago: Goal A was active → deficit = 2000 − 1800 = 200
-            new DailyLog { Date = Today.AddDays(-7), CaloriesKcal = 1800 },
-            // 1 day ago: Goal B is active → deficit = 1500 − 1200 = 300
-            new DailyLog { Date = Today.AddDays(-1), CaloriesKcal = 1200 }
+            new DailyLog { Date = Today.AddDays(-7), CaloriesKcal = 1800 },  // deficit vs TDEE = 200
+            new DailyLog { Date = Today.AddDays(-1), CaloriesKcal = 1200 }   // deficit vs TDEE = 800
         );
+
+        // Goal A active for both logs — total deficit = 200 + 800 = 1000
+        db.CalorieGoals.Add(new CalorieGoal
+        {
+            TargetCalories = 1500,
+            CreatedAt = Today.AddDays(-10).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)
+        });
         await db.SaveChangesAsync();
 
-        var result = await CreateService(db).GetAsync(Today);
+        var resultA = await CreateService(db).GetAsync(Today);
 
-        // If the service incorrectly used the current goal (B=1500) for all logs:
-        // deficit would be (1500−1800) + (1500−1200) = −300 + 300 = 0
-        // Correct answer uses the goal active on each date: 200 + 300 = 500
-        Assert.Equal(500, result.OverallCalorieDeficit);
+        // Switch to Goal B with a completely different target
+        db.CalorieGoals.Add(new CalorieGoal
+        {
+            TargetCalories = 500,
+            CreatedAt = Today.AddDays(-3).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)
+        });
+        await db.SaveChangesAsync();
+
+        var resultB = await CreateService(db).GetAsync(Today);
+
+        Assert.Equal(1000, resultA.OverallCalorieDeficit);
+        Assert.Equal(1000, resultB.OverallCalorieDeficit); // must be identical
+    }
+
+    [Fact]
+    public async Task GetAsync_OverallCalorieDeficit_UnchangedWhenDayMarkedAsCheatDay()
+    {
+        // Toggling a day's cheat-day flag must not affect the overall deficit —
+        // it is always TDEE minus actual calories regardless of the per-day target.
+        using var db = CreateDb();
+        await SeedSettingsAsync(db, tdeeKcal: 2500);
+        db.Goals.Add(new Goal { TargetWeightKg = 70m, TargetDate = Today.AddDays(90), StartDate = Today.AddDays(-7) });
+        db.CalorieGoals.Add(new CalorieGoal
+        {
+            TargetCalories = 1800,
+            CreatedAt = Today.AddDays(-8).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)
+        });
+        // 2300 kcal eaten; TDEE = 2500 → deficit = 200 regardless of cheat-day flag
+        var log = new DailyLog { Date = Today.AddDays(-3), CaloriesKcal = 2300, IsCheatDay = false };
+        db.DailyLogs.Add(log);
+        await db.SaveChangesAsync();
+
+        var resultNormal = await CreateService(db).GetAsync(Today);
+
+        log.IsCheatDay = true;
+        await db.SaveChangesAsync();
+
+        var resultCheat = await CreateService(db).GetAsync(Today);
+
+        Assert.Equal(200, resultNormal.OverallCalorieDeficit);
+        Assert.Equal(200, resultCheat.OverallCalorieDeficit); // must be identical
     }
 
     // ── Goal progress ─────────────────────────────────────────────────────────
