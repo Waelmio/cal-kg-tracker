@@ -153,8 +153,8 @@ import type { DailyLog } from '../types'
 import { formatWeight } from '../utils/units'
 import { getISOWeek, getISOWeekYear, getWeekDates } from '../utils/weeks'
 import WeightChart from '../components/dashboard/WeightChart.vue'
-import WeightLogModal from '../components/log/WeightLogModal.vue'
-import CaloriesLogModal from '../components/log/CaloriesLogModal.vue'
+import WeightLogModal from '../components/LogModals/WeightLogModal.vue'
+import CaloriesLogModal from '../components/LogModals/CaloriesLogModal.vue'
 
 const settingsStore = useSettingsStore()
 const calorieGoalsStore = useCalorieGoalsStore()

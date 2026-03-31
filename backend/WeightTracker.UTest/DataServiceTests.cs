@@ -73,6 +73,7 @@ public class DataServiceTests
             WeightKg = 75.5m,
             CaloriesKcal = 2000,
             Notes = "test note",
+            IsCheatDay = true,
             CreatedAt = created,
             UpdatedAt = created,
         });
@@ -86,7 +87,27 @@ public class DataServiceTests
         Assert.Equal(75.5m, log.WeightKg);
         Assert.Equal(2000, log.CaloriesKcal);
         Assert.Equal("test note", log.Notes);
+        Assert.True(log.IsCheatDay);
         Assert.Equal(created, log.CreatedAt);
+    }
+
+    [Fact]
+    public async Task ImportAsync_PreservesIsCheatDay()
+    {
+        using var db = CreateDb();
+        var service = new DataService(db);
+        var ts = new DateTime(2024, 1, 10, 0, 0, 0, DateTimeKind.Utc);
+
+        await service.ImportAsync(new ExportImportDto(
+            new UserSettingsDto(null, "kg", null),
+            [new DailyLogDto(0, "2024-01-10", null, 2500, null, null, true, ts, ts)],
+            [],
+            []
+        ));
+
+        var logs = await db.DailyLogs.ToListAsync();
+        Assert.Single(logs);
+        Assert.True(logs[0].IsCheatDay);
     }
 
     [Fact]

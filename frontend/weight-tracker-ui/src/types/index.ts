@@ -51,7 +51,9 @@ export interface DashboardData {
   weightChangeRateKgPerWeek: number | null
   weeklyCalorieDeficit: number | null
   weeklyCalorieDeficitDays: number
+  weeklyCalorieDeficitVsTdee: number | null
   overallCalorieDeficit: number | null
+  overallCalorieDeficitVsTarget: number | null
   overallCalorieDeficitDays: number
 }
 

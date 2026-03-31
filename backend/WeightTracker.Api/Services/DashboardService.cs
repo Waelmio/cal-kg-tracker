@@ -18,6 +18,7 @@ public class DashboardService(AppDbContext db, ICalorieLogService calorieLogServ
     private record WeeklyCalorieStats(
         double? AvgCalories,
         int? Deficit,
+        int? TdeeDeficit,
         int Days);
 
     public async Task<DashboardDto> GetAsync(DateOnly today)
@@ -42,8 +43,8 @@ public class DashboardService(AppDbContext db, ICalorieLogService calorieLogServ
         var currentWeight = allLogs.FirstOrDefault(l => l.WeightKg != null)?.WeightKg;
 
         var weight = CalcWeightStats(allLogs, now);
-        var weekly = CalcWeeklyCalorieStats(weekEnriched);
-        var (overallCalorieDeficit, overallCalorieDeficitDays) = CalcOverallCalorieDeficit(allEnrichedWithFuture, weightGoal);
+        var weekly = CalcWeeklyCalorieStats(weekEnriched, settings.TdeeKcal);
+        var (overallCalorieDeficit, overallCalorieDeficitVsTarget, overallCalorieDeficitDays) = CalcOverallCalorieDeficit(allEnrichedWithFuture, weightGoal, settings.TdeeKcal);
         var (progressPercent, kgToGoal, projectedDate) = CalcGoalProgress(weightGoal, weight.Avg7Days, currentWeight, weight.PointShift7Days, now);
         var (calorieStreakDays, calorieStreakNextDays, caloriesExcessOverStreak) = CalcCalorieStreak(allEnriched);
 
@@ -78,7 +79,9 @@ public class DashboardService(AppDbContext db, ICalorieLogService calorieLogServ
             weight.ChangeRateKgPerWeek,
             weekly.Deficit,
             weekly.Days,
+            weekly.TdeeDeficit,
             overallCalorieDeficit,
+            overallCalorieDeficitVsTarget,
             overallCalorieDeficitDays);
     }
 
@@ -132,26 +135,31 @@ public class DashboardService(AppDbContext db, ICalorieLogService calorieLogServ
 
     // Returns weekly average calories and calorie deficit for the current week.
     // Each log's EffectiveTarget already accounts for cheat days vs. regular goal.
-    private static WeeklyCalorieStats CalcWeeklyCalorieStats(List<DailyLogWithTarget> weekLogs)
+    private static WeeklyCalorieStats CalcWeeklyCalorieStats(List<DailyLogWithTarget> weekLogs, int? tdeeKcal)
     {
         double? avg = weekLogs.Count > 0 ? Math.Round(weekLogs.Average(e => e.Log.CaloriesKcal!.Value), 0) : null;
         var logsWithGoal = weekLogs.Where(e => e.EffectiveTarget.HasValue).ToList();
-        if (logsWithGoal.Count == 0) return new(avg, null, weekLogs.Count);
-        var deficit = logsWithGoal.Sum(e => e.EffectiveTarget!.Value - e.Log.CaloriesKcal!.Value);
-        return new(avg, deficit, weekLogs.Count);
+        int? deficit = logsWithGoal.Count > 0 ? logsWithGoal.Sum(e => e.EffectiveTarget!.Value - e.Log.CaloriesKcal!.Value) : null;
+        int? tdeeDeficit = tdeeKcal.HasValue && weekLogs.Count > 0
+            ? weekLogs.Sum(e => tdeeKcal.Value - e.Log.CaloriesKcal!.Value)
+            : null;
+        return new(avg, deficit, tdeeDeficit, weekLogs.Count);
     }
 
     // Returns overall calorie deficit since the weight goal's start date.
-    // Each log uses the calorie goal that was active on that specific date.
-    private static (int? deficit, int days) CalcOverallCalorieDeficit(List<DailyLogWithTarget> allLogs, Goal? goal)
+    // vsTdee always uses TDEE as the baseline so that changing a day's calorie target doesn't affect this metric.
+    // vsTarget uses each day's effective target (accounting for cheat days and goal changes).
+    private static (int? deficitVsTdee, int? deficitVsTarget, int days) CalcOverallCalorieDeficit(List<DailyLogWithTarget> allLogs, Goal? goal, int? tdeeKcal)
     {
-        if (goal is null) return (null, 0);
+        if (goal is null) return (null, null, 0);
         var goalLogs = allLogs
-            .Where(e => e.Log.Date >= goal.StartDate && e.Log.Date <= goal.TargetDate && e.Log.CaloriesKcal != null && e.EffectiveTarget.HasValue)
+            .Where(e => e.Log.Date >= goal.StartDate && e.Log.Date <= goal.TargetDate && e.Log.CaloriesKcal != null)
             .ToList();
-        if (goalLogs.Count == 0) return (null, 0);
-        var deficit = goalLogs.Sum(e => e.EffectiveTarget!.Value - e.Log.CaloriesKcal!.Value);
-        return (deficit, goalLogs.Count);
+        if (goalLogs.Count == 0) return (null, null, 0);
+        int? deficitVsTdee = tdeeKcal.HasValue ? goalLogs.Sum(e => tdeeKcal.Value - e.Log.CaloriesKcal!.Value) : null;
+        var logsWithTarget = goalLogs.Where(e => e.EffectiveTarget.HasValue).ToList();
+        int? deficitVsTarget = logsWithTarget.Count > 0 ? logsWithTarget.Sum(e => e.EffectiveTarget!.Value - e.Log.CaloriesKcal!.Value) : null;
+        return (deficitVsTdee, deficitVsTarget, goalLogs.Count);
     }
 
     // Returns goal progress: percent complete, kg remaining, and projected completion date.
