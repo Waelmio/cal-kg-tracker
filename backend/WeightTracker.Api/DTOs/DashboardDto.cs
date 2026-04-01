@@ -8,6 +8,7 @@ public record DashboardDto(
 
     // Weekly
     double? WeeklyAvgCalories,
+    int? WeeklyCalorieTarget,
     decimal? AvgWeight7Days,
     decimal? AvgWeight7DaysTrend,
     decimal? WeightTrend30Days,
