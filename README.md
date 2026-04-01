@@ -58,6 +58,32 @@ make test-frontend # Frontend only (Vitest)
 - SQLite (default) or PostgreSQL — provider chosen via env vars, auto-migrated on startup
 
 
+## Environment Variables
+
+### Database
+
+The backend selects a database provider at startup using the following priority order:
+
+1. **`DATABASE_URL`** — full PostgreSQL connection string (DSN format); takes precedence over all other options
+2. **`POSTGRES_HOST`** — PostgreSQL hostname; triggers individual-component config below
+3. Fallback: SQLite using `SQL_DB_PATH`
+
+| Variable | Default | Description |
+|---|---|---|
+| `DATABASE_URL` | — | Full PostgreSQL DSN (e.g. `postgres://user:pass@host/db`) |
+| `POSTGRES_HOST` | — | PostgreSQL server hostname |
+| `POSTGRES_DB` | `weighttracker` | PostgreSQL database name |
+| `POSTGRES_USER` | `postgres` | PostgreSQL username |
+| `POSTGRES_PASSWORD` | *(empty)* | PostgreSQL password |
+| `SQL_DB_PATH` | `weighttracker.db` | SQLite database file path |
+
+### Server
+
+| Variable | Default | Description |
+|---|---|---|
+| `ASPNETCORE_HTTP_PORTS` | `8080` | HTTP port the backend listens on |
+| `ASPNETCORE_ENVIRONMENT` | — | Runtime environment (`Development` / `Production`) |
+
 ## Project Infos
 
 ### Stack
