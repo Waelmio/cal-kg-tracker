@@ -30,6 +30,7 @@ export interface DashboardData {
 
   // Weekly
   weeklyAvgCalories: number | null
+  weeklyCalorieTarget: number | null
   avgWeight7Days: number | null
   avgWeight7DaysTrend: number | null
   weightTrend30Days: number | null

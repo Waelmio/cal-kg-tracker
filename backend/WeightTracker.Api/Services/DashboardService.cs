@@ -17,6 +17,7 @@ public class DashboardService(AppDbContext db, ICalorieLogService calorieLogServ
 
     private record WeeklyCalorieStats(
         double? AvgCalories,
+        int? AvgTarget,
         int? Deficit,
         int? TdeeDeficit,
         int Days);
@@ -42,8 +43,10 @@ public class DashboardService(AppDbContext db, ICalorieLogService calorieLogServ
         var todayEnriched = allEnriched.FirstOrDefault(e => e.Log.Date == now);
         var currentWeight = allLogs.FirstOrDefault(l => l.WeightKg != null)?.WeightKg;
 
+        var calorieGoals = await db.CalorieGoals.OrderByDescending(g => g.CreatedAt).ToListAsync();
+
         var weight = CalcWeightStats(allLogs, now);
-        var weekly = CalcWeeklyCalorieStats(weekEnriched, settings.TdeeKcal);
+        var weekly = CalcWeeklyCalorieStats(weekEnriched, settings.TdeeKcal, weekStart, calorieGoals);
         var (overallCalorieDeficit, overallCalorieDeficitVsTarget, overallCalorieDeficitDays) = CalcOverallCalorieDeficit(allEnrichedWithFuture, weightGoal, settings.TdeeKcal);
         var (progressPercent, kgToGoal, projectedDate) = CalcGoalProgress(weightGoal, weight.Avg7Days, currentWeight, weight.PointShift7Days, now);
         var (calorieStreakDays, calorieStreakNextDays, caloriesExcessOverStreak) = CalcCalorieStreak(allEnriched);
@@ -62,6 +65,7 @@ public class DashboardService(AppDbContext db, ICalorieLogService calorieLogServ
             todayEnriched?.Log.CaloriesKcal,
             todayCalorieTarget,
             weekly.AvgCalories,
+            weekly.AvgTarget,
             weight.Avg7Days,
             weight.Avg7DaysTrend,
             weight.Trend30Days,
@@ -133,9 +137,12 @@ public class DashboardService(AppDbContext db, ICalorieLogService calorieLogServ
         return new WeightStats(avg7, avg7Trend, pointShift7, trend30, volatility, changeRate);
     }
 
-    // Returns weekly average calories and calorie deficit for the current week.
+    // Returns weekly average calories, average target, and calorie deficit for the current week.
     // Each log's EffectiveTarget already accounts for cheat days vs. regular goal.
-    private static WeeklyCalorieStats CalcWeeklyCalorieStats(List<DailyLogWithTarget> weekLogs, int? tdeeKcal)
+    // AvgTarget is averaged across all 7 week days (not just logged ones).
+    private static WeeklyCalorieStats CalcWeeklyCalorieStats(
+        List<DailyLogWithTarget> weekLogs, int? tdeeKcal,
+        DateOnly weekStart, List<CalorieGoal> calorieGoals)
     {
         double? avg = weekLogs.Count > 0 ? Math.Round(weekLogs.Average(e => e.Log.CaloriesKcal!.Value), 0) : null;
         var logsWithGoal = weekLogs.Where(e => e.EffectiveTarget.HasValue).ToList();
@@ -143,7 +150,24 @@ public class DashboardService(AppDbContext db, ICalorieLogService calorieLogServ
         int? tdeeDeficit = tdeeKcal.HasValue && weekLogs.Count > 0
             ? weekLogs.Sum(e => tdeeKcal.Value - e.Log.CaloriesKcal!.Value)
             : null;
-        return new(avg, deficit, tdeeDeficit, weekLogs.Count);
+
+        // For logged days use EffectiveTarget (respects cheat day → TDEE override).
+        // For unlogged days fall back to the active calorie goal target.
+        var loggedDates = new HashSet<DateOnly>(weekLogs.Select(e => e.Log.Date));
+        var weekTargets = new List<int>();
+        foreach (var entry in weekLogs)
+            if (entry.EffectiveTarget.HasValue) weekTargets.Add(entry.EffectiveTarget.Value);
+        for (var i = 0; i < 7; i++)
+        {
+            var day = weekStart.AddDays(i);
+            if (loggedDates.Contains(day)) continue;
+            var cutoff = day.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
+            var t = calorieGoals.FirstOrDefault(g => g.CreatedAt <= cutoff)?.TargetCalories;
+            if (t.HasValue) weekTargets.Add(t.Value);
+        }
+        int? avgTarget = weekTargets.Count > 0 ? (int)Math.Round(weekTargets.Average()) : null;
+
+        return new(avg, avgTarget, deficit, tdeeDeficit, weekLogs.Count);
     }
 
     // Returns overall calorie deficit since the weight goal's start date.

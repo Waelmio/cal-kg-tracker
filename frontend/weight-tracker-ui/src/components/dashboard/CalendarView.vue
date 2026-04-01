@@ -46,7 +46,7 @@
           <div v-for="d in DAY_LABELS" :key="d" class="text-center text-[10px] font-medium text-gray-400 pb-1">{{ d }}</div>
 
           <template v-for="week in calendarWeeks" :key="week.key">
-            <div :class="weekChipClass(week)" class="week-chip">
+            <div :class="weekChipClass(week)" class="week-chip cursor-pointer" @dblclick.stop="openWeekModal(week)" title="Double-click for week details">
               <span class="text-xs">{{ week.week }}</span>
               <span v-if="week.avgWeightDisplay" class="text-[11px] opacity-80 leading-none mt-0.5">{{ week.avgWeightDisplay }}</span>
             </div>
@@ -59,8 +59,9 @@
               :class="dayCellClass(day)"
               class="day-cell"
             >
+              <div v-if="day.isCheatDay" class="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-orange-400" />
               <span class="text-sm font-semibold leading-none">{{ day.dayNum }}</span>
-              <span v-if="!day.isOtherMonth && day.calories != null" class="text-xs leading-none opacity-90 mt-1">{{ day.calories }}</span>
+              <span v-if="day.calories != null" class="text-xs leading-none opacity-90 mt-1">{{ day.calories }}</span>
             </button>
           </template>
         </div>
@@ -102,6 +103,20 @@
       </div>
     </Transition>
   </div>
+
+  <WeekDetailModal
+    v-if="weekModalData"
+    :week-num="weekModalData.week"
+    :year="weekModalData.year"
+    :days="weekModalData.days.map(d => ({ date: d.date, shortLabel: d.shortLabel, calories: d.calories, target: d.target }))"
+    :avg-calories="weekModalData.avgCalories"
+    :week-target="weekModalData.weekTarget"
+    :avg-weight-kg="weekModalData.avgWeightKg"
+    :unit="unit"
+    :tdee="tdee ?? null"
+    @close="weekModalData = null"
+    @edit-calories="date => emit('edit-calories', date)"
+  />
 </template>
 
 <script setup lang="ts">
@@ -109,6 +124,7 @@ import { ref, computed } from 'vue'
 import type { DailyLog, CalorieGoal, Goal, WeightUnit } from '../../types'
 import { formatWeight } from '../../utils/units'
 import { getISOWeek, getISOWeekYear, getWeekDates } from '../../utils/weeks'
+import WeekDetailModal from './WeekDetailModal.vue'
 
 const emit = defineEmits<{
   'need-from': [date: string]
@@ -121,6 +137,7 @@ const props = defineProps<{
   calorieGoals: CalorieGoal[]
   unit: WeightUnit
   goal?: Goal | null
+  tdee?: number | null
 }>()
 
 const DAY_LABELS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
@@ -287,14 +304,14 @@ interface DayInfo {
   date: string; dayNum: number; isOtherMonth: boolean; isToday: boolean
   calories: number | null; target: number | null
   hasWeight: boolean; weightDisplay: string; weightShort: string | null
-  shortLabel: string; fullLabel: string; status: DayStatus
+  shortLabel: string; fullLabel: string; status: DayStatus; isCheatDay: boolean
 }
 
 
 interface WeekData {
   year: number; week: number; key: string; days: DayInfo[]
   avgCalories: number | null; weekTarget: number | null; status: WeekStatus
-  avgWeightDisplay: string | null
+  avgWeightDisplay: string | null; avgWeightKg: number | null
 }
 
 const fullDayFmt  = new Intl.DateTimeFormat('en', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })
@@ -326,6 +343,7 @@ const calendarWeeks = computed<WeekData[]>(() => {
     // Goal-range subset is used for the chip colour; all days drive the orange/red logic (via monthStatus).
     let calSum = 0, calCount = 0, wgtSum = 0, wgtCount = 0
     let goalCalSum = 0, goalCalCount = 0
+    let tgtSum = 0, tgtCount = 0
     for (const date of dates) {
       const log = logMap.value.get(date)
       if (log?.caloriesKcal != null) {
@@ -334,11 +352,13 @@ const calendarWeeks = computed<WeekData[]>(() => {
         if (g && date >= g.startDate && date <= g.targetDate) { goalCalSum += log.caloriesKcal; goalCalCount++ }
       }
       if (log?.weightKg != null) { wgtSum += log.weightKg; wgtCount++ }
+      const t = log?.calorieTarget ?? getTargetForDate(date)
+      if (t != null) { tgtSum += t; tgtCount++ }
     }
     const chipCalSum   = goalCalCount > 0 ? goalCalSum   : calSum
     const chipCalCount = goalCalCount > 0 ? goalCalCount : calCount
     const avgCalories = chipCalCount > 0 ? chipCalSum / chipCalCount : null
-    const weekTarget  = getTargetForDate(dates[3])
+    const weekTarget  = tgtCount > 0 ? Math.round(tgtSum / tgtCount) : null
     const avgWeightDisplay = wgtCount > 0
       ? (props.unit === 'lbs' ? wgtSum / wgtCount * 2.20462 : wgtSum / wgtCount).toFixed(1)
       : null
@@ -357,7 +377,7 @@ const calendarWeeks = computed<WeekData[]>(() => {
       const target   = log?.calorieTarget ?? getTargetForDate(date)
 
       let dayStatus: DayStatus = 'gray'
-      if (!isOtherMonth && calories != null && target != null) {
+      if (calories != null && target != null) {
         if (calories <= target) dayStatus = 'green'
         else dayStatus = (wStatus === 'green' || wStatus === 'orange') ? 'orange' : 'red'
       }
@@ -373,15 +393,24 @@ const calendarWeeks = computed<WeekData[]>(() => {
         shortLabel: shortDayFmt.format(d),
         fullLabel: fullDayFmt.format(d),
         status: dayStatus,
+        isCheatDay: log?.isCheatDay ?? false,
       }
     })
 
-    weeks.push({ year: wYear, week: wNum, key, days, avgCalories: avgCalories != null ? Math.round(avgCalories) : null, weekTarget, status: wStatus, avgWeightDisplay })
+    weeks.push({ year: wYear, week: wNum, key, days, avgCalories: avgCalories != null ? Math.round(avgCalories) : null, weekTarget, status: wStatus, avgWeightDisplay, avgWeightKg: wgtCount > 0 ? wgtSum / wgtCount : null })
     cursor.setUTCDate(cursor.getUTCDate() + 7)
   } // end for _row
 
   return weeks
 })
+
+// ── Week detail modal ─────────────────────────────────────────────────────────
+
+const weekModalData = ref<WeekData | null>(null)
+
+function openWeekModal(week: WeekData) {
+  weekModalData.value = week
+}
 
 // ── Day / week selection ─────────────────────────────────────────────────────
 
@@ -435,13 +464,18 @@ function weekChipClass(w: WeekData): string {
 }
 
 function dayCellClass(day: DayInfo): string {
-  if (day.isOtherMonth) return 'text-gray-400 bg-transparent hover:bg-gray-100 cursor-pointer'
+  const isSelected = selectedDay.value === day.date
+  const ring       = isSelected ? 'ring-2 ring-offset-1 ring-gray-700 relative z-10 ' : ''
+  const todayRing  = day.isToday && !isSelected ? 'ring-2 ring-blue-400 ' : ''
 
-  const isSelected  = selectedDay.value === day.date
-  const ring        = isSelected ? 'ring-2 ring-offset-1 ring-gray-700 relative z-10 ' : ''
-  const todayRing   = day.isToday && !isSelected ? 'ring-2 ring-blue-400 ' : ''
-  const faded       = isOutsideGoal(day.date)
+  if (day.isOtherMonth) {
+    if (day.status === 'green')  return ring + 'bg-emerald-50 text-emerald-300 hover:bg-emerald-100'
+    if (day.status === 'orange') return ring + 'bg-amber-50 text-amber-400 hover:bg-amber-100'
+    if (day.status === 'red')    return ring + 'bg-rose-50 text-rose-300 hover:bg-rose-100'
+    return ring + 'bg-transparent text-gray-300 hover:bg-gray-100'
+  }
 
+  const faded = isOutsideGoal(day.date)
   if (day.status === 'green')  return ring + todayRing + (faded ? 'bg-emerald-50 text-emerald-300 hover:bg-emerald-100' : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200')
   if (day.status === 'orange') return ring + todayRing + (faded ? 'bg-amber-50 text-amber-300 hover:bg-amber-100'       : 'bg-amber-100 text-amber-800 hover:bg-amber-200')
   if (day.status === 'red')    return ring + todayRing + (faded ? 'bg-rose-50 text-rose-300 hover:bg-rose-100'           : 'bg-rose-100 text-rose-800 hover:bg-rose-200')
@@ -473,7 +507,7 @@ function calorieClass(calories: number | null, target: number | null): string {
 }
 
 .day-cell {
-  @apply flex flex-col items-center justify-center rounded-lg transition-all cursor-pointer select-none py-2 min-h-[4rem];
+  @apply relative flex flex-col items-center justify-center rounded-lg transition-all cursor-pointer select-none py-2 min-h-[4rem];
 }
 
 .no-scrollbar::-webkit-scrollbar { display: none; }

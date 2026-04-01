@@ -42,7 +42,7 @@
           :value="dashboard.data.weeklyAvgCalories != null ? Math.round(dashboard.data.weeklyAvgCalories) : null"
           unit="kcal"
           :value-class="calorieAvgClass"
-          :sub="dashboard.data.dailyCalorieTarget != null ? `       /${dashboard.data.dailyCalorieTarget} kcal` : undefined" />
+          :sub="dashboard.data.weeklyCalorieTarget != null ? `       /${dashboard.data.weeklyCalorieTarget} kcal` : undefined" />
           <StatCard
           label="Weekly Deficit"
           :value="tdeeWeeklyDeficit != null ? `${tdeeWeeklyDeficit > 0 ? '-' : '+'}${Math.abs(tdeeWeeklyDeficit)}` : (dashboard.data.weeklyCalorieDeficit != null ? `${dashboard.data.weeklyCalorieDeficit > 0 ? '-' : '+'}${Math.abs(dashboard.data.weeklyCalorieDeficit)}` : null)"
@@ -69,11 +69,12 @@
         :calories="dashboard.data.todayCaloriesKcal"
         :target="dashboard.data.dailyCalorieTarget" />
 
-      <WeeklyStrip
+      <CalendarView
         :logs="logStore.logs"
         :calorie-goals="calorieGoalsStore.goals"
         :unit="unit"
         :goal="dashboard.data.activeGoal"
+        :tdee="settingsStore.settings.tdeeKcal"
         @need-from="onNeedFrom"
         @edit-weight="date => { editDate = date; showWeight = true }"
         @edit-calories="date => { editDate = date; showCalories = true }" />
@@ -114,7 +115,7 @@ import StatCard from '../components/dashboard/StatCard.vue'
 import CalorieBar from '../components/dashboard/CalorieBar.vue'
 import ProgressCard from '../components/dashboard/ProgressCard.vue'
 import WeightChart from '../components/dashboard/WeightChart.vue'
-import WeeklyStrip from '../components/dashboard/WeeklyStrip.vue'
+import CalendarView from '../components/dashboard/CalendarView.vue'
 import WeightLogModal from '../components/LogModals/WeightLogModal.vue'
 import CaloriesLogModal from '../components/LogModals/CaloriesLogModal.vue'
 
@@ -159,7 +160,7 @@ const weeklyDeficitSubHtml = computed(() => {
 
 const calorieAvgClass = computed(() => {
   const avg = dashboard.data?.weeklyAvgCalories
-  const target = dashboard.data?.dailyCalorieTarget
+  const target = dashboard.data?.weeklyCalorieTarget
   if (avg == null || target == null) return 'text-gray-800'
   return avg > target ? 'text-red-500' : 'text-emerald-500'
 })
