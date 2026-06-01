@@ -20,8 +20,10 @@
               v-for="m in recentMonthsData"
               :key="m.key"
               @click="selectMonth(m.year, m.month)"
+              @dblclick.stop="openMonthModal(m)"
               :class="monthChipClass(m)"
               class="flex-shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+              title="Double-click for month details"
             >{{ m.label }}</button>
           </div>
         </Transition>
@@ -117,6 +119,26 @@
     @close="weekModalData = null"
     @edit-calories="date => emit('edit-calories', date)"
   />
+
+  <MonthDetailModal
+    v-if="monthModalData"
+    :year="monthModalData.year"
+    :month="monthModalData.month"
+    :weeks="monthModalData.weeks"
+    :avg-calories="monthModalData.avgCalories"
+    :month-target="monthModalData.monthTarget"
+    :avg-weight-kg="monthModalData.avgWeightKg"
+    :logged-days="monthModalData.loggedDays"
+    :total-deficit-vs-target="monthModalData.totalDeficitVsTarget"
+    :total-deficit-vs-tdee="monthModalData.totalDeficitVsTdee"
+    :cheat-days="monthModalData.cheatDays"
+    :estimated-monthly-tdee="monthModalData.estimatedMonthlyTdee"
+    :start-weight-kg="monthModalData.startWeightKg"
+    :end-weight-kg="monthModalData.endWeightKg"
+    :unit="unit"
+    :tdee="tdee ?? null"
+    @close="monthModalData = null"
+  />
 </template>
 
 <script setup lang="ts">
@@ -124,7 +146,9 @@ import { ref, computed } from 'vue'
 import type { DailyLog, CalorieGoal, Goal, WeightUnit } from '../../types'
 import { formatWeight } from '../../utils/units'
 import { getISOWeek, getISOWeekYear, getWeekDates } from '../../utils/weeks'
+import { getTargetForDate, avg7DayWeight, estimateMonthlyTdee } from '../../utils/stats'
 import WeekDetailModal from './WeekDetailModal.vue'
+import MonthDetailModal, { type MonthWeekSummary } from './MonthDetailModal.vue'
 
 const emit = defineEmits<{
   'need-from': [date: string]
@@ -232,16 +256,6 @@ const logMap = computed(() => {
   return m
 })
 
-function getTargetForDate(date: string): number | null {
-  const d = new Date(date + 'T00:00:00Z')
-  const goal = props.calorieGoals.find((g) => {
-    const gDay = new Date(g.createdAt)
-    gDay.setUTCHours(0, 0, 0, 0)
-    return gDay <= d
-  })
-  return goal?.targetCalories ?? null
-}
-
 // ── Status types & computation ───────────────────────────────────────────────
 
 type MonthStatus = 'green' | 'red' | 'gray'
@@ -257,7 +271,7 @@ function computeMonthStatus(year: number, month: number, goalFiltered = false): 
     const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
     const log = logMap.value.get(date)
     if (log?.caloriesKcal != null) {
-      const target = log.calorieTarget ?? getTargetForDate(date)
+      const target = log.calorieTarget ?? getTargetForDate(date, props.calorieGoals)
       if (target != null) {
         totalCalories += log.caloriesKcal; totalTarget += target; count++
         if (goal && date >= goal.startDate && date <= goal.targetDate) {
@@ -352,7 +366,7 @@ const calendarWeeks = computed<WeekData[]>(() => {
         if (g && date >= g.startDate && date <= g.targetDate) { goalCalSum += log.caloriesKcal; goalCalCount++ }
       }
       if (log?.weightKg != null) { wgtSum += log.weightKg; wgtCount++ }
-      const t = log?.calorieTarget ?? getTargetForDate(date)
+      const t = log?.calorieTarget ?? getTargetForDate(date, props.calorieGoals)
       if (t != null) { tgtSum += t; tgtCount++ }
     }
     const chipCalSum   = goalCalCount > 0 ? goalCalSum   : calSum
@@ -374,7 +388,7 @@ const calendarWeeks = computed<WeekData[]>(() => {
       const isOtherMonth = d.getUTCMonth() !== month || d.getUTCFullYear() !== year
       const log      = logMap.value.get(date)
       const calories = log?.caloriesKcal ?? null
-      const target   = log?.calorieTarget ?? getTargetForDate(date)
+      const target   = log?.calorieTarget ?? getTargetForDate(date, props.calorieGoals)
 
       let dayStatus: DayStatus = 'gray'
       if (calories != null && target != null) {
@@ -410,6 +424,128 @@ const weekModalData = ref<WeekData | null>(null)
 
 function openWeekModal(week: WeekData) {
   weekModalData.value = week
+}
+
+// ── Month detail modal ────────────────────────────────────────────────────────
+
+interface MonthModalData {
+  year: number
+  month: number
+  weeks: MonthWeekSummary[]
+  avgCalories: number | null
+  monthTarget: number | null
+  avgWeightKg: number | null
+  loggedDays: number
+  totalDeficitVsTarget: number | null
+  totalDeficitVsTdee: number | null
+  cheatDays: number
+  estimatedMonthlyTdee: number | null
+  startWeightKg: number | null
+  endWeightKg: number | null
+}
+
+const monthModalData = ref<MonthModalData | null>(null)
+
+function openMonthModal(chip: MonthChip) {
+  const { year, month } = chip
+
+  const firstDay = new Date(Date.UTC(year, month, 1))
+  const firstDow = firstDay.getUTCDay() || 7
+  const cursor = new Date(firstDay)
+  cursor.setUTCDate(firstDay.getUTCDate() - (firstDow - 1))
+
+  const weeks: MonthWeekSummary[] = []
+  let monthCalSum = 0, monthCalCount = 0
+  let monthTgtSum = 0, monthTgtCount = 0
+  let monthWgtSum = 0, monthWgtCount = 0
+  let monthDefTarget = 0, monthDefTargetCount = 0
+  let monthDefTdee = 0, monthDefTdeeCount = 0
+  let cheatDays = 0
+  const weightEntries: { date: string; weightKg: number }[] = []
+
+  for (let _row = 0; _row < 6; _row++) {
+    const wYear = getISOWeekYear(cursor)
+    const wNum  = getISOWeek(cursor)
+    const dates = getWeekDates(wYear, wNum)
+
+    let calSum = 0, calCount = 0
+    let wgtSum = 0, wgtCount = 0
+    let defTarget = 0, defTargetCount = 0
+    let defTdee = 0, defTdeeCount = 0
+    let hasAnyDayInMonth = false
+
+    for (const date of dates) {
+      const d = new Date(date + 'T00:00:00Z')
+      const isInMonth = d.getUTCMonth() === month && d.getUTCFullYear() === year
+      if (isInMonth) hasAnyDayInMonth = true
+
+      const log = logMap.value.get(date)
+      const calories = log?.caloriesKcal ?? null
+      const target = log?.calorieTarget ?? getTargetForDate(date, props.calorieGoals)
+      const weight = log?.weightKg ?? null
+
+      if (calories != null) {
+        calSum += calories; calCount++
+        if (target != null) { defTarget += target - calories; defTargetCount++ }
+        if (props.tdee != null) { defTdee += props.tdee - calories; defTdeeCount++ }
+
+        if (isInMonth) {
+          monthCalSum += calories; monthCalCount++
+          if (target != null) { monthDefTarget += target - calories; monthDefTargetCount++ }
+          if (props.tdee != null) { monthDefTdee += props.tdee - calories; monthDefTdeeCount++ }
+        }
+      }
+      if (weight != null) {
+        wgtSum += weight; wgtCount++
+        if (isInMonth) {
+          monthWgtSum += weight; monthWgtCount++
+          weightEntries.push({ date, weightKg: weight })
+        }
+      }
+      if (target != null && isInMonth) { monthTgtSum += target; monthTgtCount++ }
+      if (isInMonth && log?.isCheatDay) cheatDays++
+    }
+
+    if (hasAnyDayInMonth) {
+      weeks.push({
+        weekNum: wNum,
+        avgCalories: calCount > 0 ? Math.round(calSum / calCount) : null,
+        avgWeightKg: wgtCount > 0 ? wgtSum / wgtCount : null,
+        loggedDays: calCount,
+        deficitVsTarget: defTargetCount > 0 ? Math.round(defTarget) : null,
+        deficitVsTdee: defTdeeCount > 0 && props.tdee != null ? Math.round(defTdee) : null,
+      })
+    }
+
+    cursor.setUTCDate(cursor.getUTCDate() + 7)
+  }
+
+  const estimatedMonthlyTdee = monthCalCount > 0
+    ? estimateMonthlyTdee(monthCalSum / monthCalCount, monthCalCount, weightEntries)
+    : null
+
+  const firstOfMonth = new Date(Date.UTC(year, month, 1))
+  const lastOfMonth  = new Date(Date.UTC(year, month + 1, 0))
+  const endAnchor    = today <= lastOfMonth ? today : lastOfMonth
+
+  const startWeightKg = avg7DayWeight(firstOfMonth, logMap.value)
+  const endWeightKg   = avg7DayWeight(endAnchor, logMap.value)
+
+  monthModalData.value = {
+    year,
+    month,
+    weeks,
+    avgCalories: monthCalCount > 0 ? Math.round(monthCalSum / monthCalCount) : null,
+    monthTarget: monthTgtCount > 0 ? Math.round(monthTgtSum / monthTgtCount) : null,
+    avgWeightKg: monthWgtCount > 0 ? monthWgtSum / monthWgtCount : null,
+    loggedDays: monthCalCount,
+    totalDeficitVsTarget: monthDefTargetCount > 0 ? Math.round(monthDefTarget) : null,
+    totalDeficitVsTdee: monthDefTdeeCount > 0 ? Math.round(monthDefTdee) : null,
+    cheatDays,
+    estimatedMonthlyTdee,
+    startWeightKg,
+    endWeightKg,
+  }
 }
 
 // ── Day / week selection ─────────────────────────────────────────────────────
