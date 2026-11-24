@@ -41,7 +41,7 @@ describe('LogSheet', () => {
     await open([], [log({ date: '2026-11-23', weightKg: 83.8 })])
     expect(q('#kcal').value).toBe('')
     expect(q('#kg').value).toBe('')
-    expect(q('#kg').placeholder).toBe('Last 83.8 kg')
+    expect(q('#kg').placeholder).toBe('83.8')
     expect(saveButton().textContent).toContain('Delete entry')
   })
 
@@ -62,6 +62,13 @@ describe('LogSheet', () => {
   it('keeps stored calories instead of the target', async () => {
     await open([log({ caloriesKcal: 1240 })], [], { planned: null })
     expect(q('#kcal').value).toBe('1240')
+  })
+
+  it('finds the last weight however long ago it was', async () => {
+    await open([], [log({ date: '2026-03-02', weightKg: 91.2 })])
+    expect(q('#kg').placeholder).toBe('91.2')
+    expect(logApi.getAll).toHaveBeenCalledWith(expect.objectContaining({ to: '2026-11-23' }))
+    expect(vi.mocked(logApi.getAll).mock.calls.some(([p]) => p?.to === '2026-11-23' && p.from === undefined)).toBe(true)
   })
 
   it('only fills the last weight when the weight box is clicked', async () => {

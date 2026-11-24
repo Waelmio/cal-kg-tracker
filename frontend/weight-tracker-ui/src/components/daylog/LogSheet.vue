@@ -183,7 +183,8 @@ const kcalAfter = computed(() => {
   return ''
 })
 
-const lastWeightHint = computed(() => (lastWeight.value == null ? 'Weight' : `Last ${displayWeight(lastWeight.value, unit.value).toFixed(1)} ${unit.value}`))
+// The placeholder is the last weight itself, nothing else.
+const lastWeightHint = computed(() => (lastWeight.value == null ? 'Weight' : displayWeight(lastWeight.value, unit.value).toFixed(1)))
 const cheatHint = computed(() => (app.settings.tdeeKcal ? `Uses ${app.settings.tdeeKcal} kcal as today's target` : "Uses your TDEE as today's target"))
 const cheatHintShort = computed(() => (app.settings.tdeeKcal ? `uses ${app.settings.tdeeKcal} as the target` : 'uses your TDEE as the target'))
 
@@ -236,7 +237,8 @@ async function load() {
     const monday = mondayOf(date.value)
     const [logs, earlier, calendar] = await Promise.all([
       logApi.getAll({ from: monday, to: addDays(monday, 6) }),
-      logApi.getAll({ from: addDays(date.value, -60), to: addDays(date.value, -1) }),
+      // The latest weigh-in before this day, however long ago (newest first).
+      logApi.getAll({ to: addDays(date.value, -1), limit: 500 }),
       statsApi.getCalendar(date.value, date.value),
     ])
     weekLogs.value = logs
