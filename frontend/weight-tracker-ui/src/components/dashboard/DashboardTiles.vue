@@ -94,7 +94,7 @@
         <div class="big" :style="{ color: o.kcal >= 0 ? UNDER : OVER }">{{ kcal(Math.abs(o.kcal)) }} <span class="unit">{{ o.kcal >= 0 ? 'kcal below TDEE' : 'kcal above TDEE' }}</span></div>
       </template>
       <template #sub>
-        <p class="tile-sub">{{ o.loggedDays === 0 ? `No logged days ${o.sinceGoalStart ? 'since the goal started' : 'in the last four full weeks'}` : o.sinceGoalStart ? `${o.loggedDays} / ${o.totalDays} days logged since ${shortDate(o.since, true)}` : `${o.loggedDays} / ${o.totalDays} days logged in the last four full weeks` }}</p>
+        <p class="tile-sub">{{ o.loggedDays === 0 ? `No logged days ${o.sinceGoalStart ? 'since the goal started' : 'in the last four full weeks'}` : o.sinceGoalStart ? `${o.loggedDays} / ${o.totalDays} days logged since ${shortDate(o.since, o.since.slice(0, 4) !== s.today.slice(0, 4))}` : `${o.loggedDays} / ${o.totalDays} days logged in the last four full weeks` }}</p>
       </template>
       <template v-if="o.loggedDays > 0">
         <TileRow>
@@ -157,6 +157,6 @@ const paceColor = computed(() => {
 .muted { color: #4b5563; }
 .bar { height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; margin: 4px 0 6px; }
 .bar > div { height: 8px; }
-.srow { display: grid; grid-template-columns: minmax(0, 1fr) 56px 64px; gap: 8px; align-items: baseline; font-size: 14px; line-height: 1.3; min-height: 20px; }
+.srow { display: grid; grid-template-columns: minmax(0, 1fr) 56px 64px; gap: 8px; align-items: baseline; font-size: 14px; line-height: 1.3; min-height: 18px; }
 .r { text-align: right; }
 </style>
