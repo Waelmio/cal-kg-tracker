@@ -26,7 +26,11 @@ public class SettingsService(AppDbContext db) : ISettingsService
         {
             // Keep the TDEE history in step with the legacy single value until the cleanup phase.
             if (dto.TdeeKcal is { } kcal)
-                db.TdeeEntries.Add(new TdeeEntry { Kcal = kcal, EffectiveFrom = dto.Today ?? DateOnly.FromDateTime(DateTime.UtcNow), Source = TdeeSource.Manual });
+            {
+                var from = dto.Today ?? DateOnly.FromDateTime(DateTime.UtcNow);
+                db.TdeeEntries.RemoveRange(db.TdeeEntries.Where(t => t.EffectiveFrom == from));
+                db.TdeeEntries.Add(new TdeeEntry { Kcal = kcal, EffectiveFrom = from, Source = TdeeSource.Manual });
+            }
             s.TdeeKcal = dto.TdeeKcal;
         }
         if (dto.AveragingWeeks is { } weeks) s.AveragingWeeks = weeks;

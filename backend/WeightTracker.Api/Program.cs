@@ -48,6 +48,7 @@ builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<ISettingsService, SettingsService>();
 builder.Services.AddScoped<ITdeeComputationService, TdeeComputationService>();
 builder.Services.AddScoped<IDataService, DataService>();
+builder.Services.AddScoped<ITdeeEntryService, TdeeEntryService>();
 builder.Services.AddScoped<WeightTracker.Api.Stats.IStatsService, WeightTracker.Api.Stats.StatsService>();
 
 var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? [];
