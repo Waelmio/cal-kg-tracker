@@ -9,7 +9,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted } from 'vue'
 import AppNav from './components/layout/AppNav.vue'
-import LogSheet from './components/log/LogSheet.vue'
+import LogSheet from './components/daylog/LogSheet.vue'
 import { useAppStore } from './stores/app'
 import { useLogSheetStore } from './stores/logSheet'
 

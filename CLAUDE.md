@@ -55,7 +55,7 @@ Controllers are thin. All statistics live in `Stats/`:
 
 Vue 3 + Pinia. No statistic is computed in the frontend; it formats what `/api/stats/*` returns.
 - `stores/app.ts`: settings, local `today`, and `version`; every mutation calls `refresh()` and views refetch via `composables/useAsyncData.ts`.
-- `stores/logSheet.ts` + `components/log/LogSheet.vue`: the single log dialog (full screen below 640 px).
+- `stores/logSheet.ts` + `components/daylog/LogSheet.vue`: the single log dialog (full screen below 640 px).
 - `components/ui/`: `Tile`, `TileRow`, `StatusChip`, `InfoTip`, `Modal`, `ErrorNote`.
 - `utils/dates.ts` (local dates), `utils/format.ts` (wording, colors), `utils/units.ts`, `utils/chart.ts` (time-axis geometry).
 
