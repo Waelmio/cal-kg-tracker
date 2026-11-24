@@ -173,7 +173,8 @@ public sealed class StatsCalculator(StatsData data)
     public sealed record BudgetResult(
         IReadOnlyDictionary<DateOnly, int> Days,        // today..Sunday, rounded, planned days included
         IReadOnlySet<DateOnly> UserLogged,              // future days the user logged (kept as typed)
-        int TodayBudget);
+        int TodayBudget,
+        IReadOnlyDictionary<DateOnly, int> FutureDays); // the next Window-1 weeks, planned the same way
 
     /// <param name="eatenToday">Calories eaten today; if they exceed today's budget, today is treated as fixed at that amount.</param>
     public BudgetResult? Budget(int? eatenToday)
@@ -213,7 +214,69 @@ public sealed class StatsCalculator(StatsData data)
         var days = new SortedDictionary<DateOnly, int>();
         foreach (var (d, v) in result) days[d] = Rnd(v);
         foreach (var (d, v) in planned) days[d] = v;
-        return new BudgetResult(days, planned.Keys.ToHashSet(), Rnd(todayBudget));
+
+        // What this week's plan means for the weeks after it (see FutureBudget).
+        var simulated = new Dictionary<DateOnly, double>();
+        foreach (var d in rest)
+        {
+            if (planned.TryGetValue(d, out var typed)) simulated[d] = typed;
+            else if (d == today && eatenToday is { } e && e > todayBudget) simulated[d] = e;
+            else simulated[d] = Realistic(d, result[d]);
+        }
+        return new BudgetResult(days, planned.Keys.ToHashSet(), Rnd(todayBudget), FutureBudget(monday, simulated));
+    }
+
+    /// <summary>
+    /// Plans the weeks after this one. The rule is the same as for this week: any Window consecutive weeks
+    /// should average the target. Week k looks at the Window weeks ending with it, counts what was logged
+    /// as eaten and the earlier planned days (this week's plan, then the weeks before k) as eaten at their
+    /// budget, and shares what is left of the pool over its free days. A week that was over by more than the
+    /// free days can absorb (budget clamped at 0) keeps pulling the next weeks down until it leaves the window.
+    /// Only Window-1 weeks ahead are affected by what is logged now; later weeks are simply on target.
+    /// </summary>
+    /// <summary>
+    /// A day whose budget was clamped to 0 can't really be eaten at 0: later weeks would be credited for
+    /// fasting that never happens. For the plan of the following weeks such a day counts as eaten at its target.
+    /// </summary>
+    private double Realistic(DateOnly d, double budget) => budget > 0 ? budget : Target(d) ?? 0;
+
+    private IReadOnlyDictionary<DateOnly, int> FutureBudget(DateOnly thisMonday, Dictionary<DateOnly, double> simulated)
+    {
+        var future = new SortedDictionary<DateOnly, int>();
+        for (var k = 1; k < Window; k++)
+        {
+            var monday = thisMonday.AddDays(7 * k);
+            var week = Range(monday, monday.AddDays(6)).ToList();
+            var from = monday.AddDays(-7 * (Window - 1));
+
+            // Days already decided: logged before today, and planned days of earlier weeks.
+            var counted = Range(from, monday.AddDays(-1))
+                .Where(d => d < data.Today ? IsLogged(d) && Target(d) is not null : simulated.ContainsKey(d))
+                .ToList();
+            double Eaten(DateOnly d) => d < data.Today ? Calories(d)!.Value : simulated[d];
+
+            // Days of this week the user already logged ahead of time stay as typed.
+            var typed = week.Where(d => Calories(d) is not null).ToDictionary(d => d, d => (double)Calories(d)!.Value);
+            var free = week.Where(d => !typed.ContainsKey(d)).ToList();
+            if (free.Count == 0)
+            {
+                foreach (var d in week) simulated[d] = typed[d];
+                continue;
+            }
+
+            var pool = counted.Concat(week).Sum(d => (double)(Target(d) ?? 0))
+                       - counted.Sum(Eaten) - typed.Values.Sum();
+            var extra = (pool - free.Sum(d => (double)(Target(d) ?? 0))) / free.Count;
+
+            foreach (var d in week)
+            {
+                if (typed.TryGetValue(d, out var t)) { simulated[d] = t; future[d] = Rnd(t); continue; }
+                var budget = Math.Max(0, (Target(d) ?? 0) + extra);
+                simulated[d] = Realistic(d, budget);
+                future[d] = Rnd(budget);
+            }
+        }
+        return future;
     }
 
     // ── Streak (3.5) ─────────────────────────────────────────────────────────

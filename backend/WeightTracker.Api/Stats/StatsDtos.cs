@@ -26,7 +26,8 @@ public record BudgetDto(
     int? AvgTargetSoFar,
     int ExpectedAverage,
     int? ExpectedDeficitKcal,
-    List<PlannedDayDto> Days);
+    List<PlannedDayDto> Days,
+    List<PlannedDayDto> FutureDays);
 
 public record StreakRowDto(int Days, int? AvgCalories, int? AvgGap);
 

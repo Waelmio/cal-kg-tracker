@@ -121,6 +121,18 @@ public abstract class StatsEndpointTestsBase
     }
 
     [Fact]
+    public async Task Calendar_PlansTheFollowingWeeks_AsFarAsTheWindowReaches()
+    {
+        var two = await Get(await LoadFixtureAsync(2), $"/api/stats/calendar?from=2026-11-30&to=2026-12-13&today={Today}");
+        var days = two.GetProperty("days").EnumerateArray().ToDictionary(x => x.GetProperty("date").GetString()!);
+        Assert.InRange(days["2026-12-03"].GetProperty("planned").GetInt32(), 1845, 1847);   // next week: planned
+        Assert.Equal(JsonValueKind.Null, days["2026-12-08"].GetProperty("planned").ValueKind);   // two weeks ahead: not
+
+        var one = await Get(await LoadFixtureAsync(1), $"/api/stats/calendar?from=2026-11-30&to=2026-12-06&today={Today}");
+        Assert.All(one.GetProperty("days").EnumerateArray(), d => Assert.Equal(JsonValueKind.Null, d.GetProperty("planned").ValueKind));
+    }
+
+    [Fact]
     public async Task Calendar_WeekStatus_DependsOnWindow()
     {
         var client = await LoadFixtureAsync(3);

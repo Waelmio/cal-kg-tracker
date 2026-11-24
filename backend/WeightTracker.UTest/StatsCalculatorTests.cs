@@ -301,3 +301,79 @@ public class StatsCalculatorTests
         Assert.Contains("70%", r.Missing);
     }
 }
+
+public class FutureBudgetTests
+{
+    private static DateOnly D(string s) => DateOnly.Parse(s);
+
+    [Fact]
+    public void Window1_PlansNothingBeyondThisWeek()
+    {
+        Assert.Empty(FixtureLoader.Calc(1).Budget(null)!.FutureDays);
+    }
+
+    [Fact]
+    public void Window2_PlansNextWeek_SoTheTwoWeekAverageStaysOnTarget()
+    {
+        var b = FixtureLoader.Calc(2).Budget(null)!;
+        Assert.Equal(7, b.FutureDays.Count);
+        Assert.Equal(D("2026-11-30"), b.FutureDays.Keys.Min());
+        Assert.Equal(D("2026-12-06"), b.FutureDays.Keys.Max());
+        // pool of weeks 23 Nov..6 Dec = 14 * 1850, minus 1689 logged and 6 days planned at 1881 (rounded), over 7 days
+        Assert.All(b.FutureDays.Values, v => Assert.InRange(v, 1845, 1847));
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(5)]
+    public void PlansWindowMinusOneWeeksAhead_AndEveryWindowAveragesTheTarget(int window)
+    {
+        var c = FixtureLoader.Calc(window);
+        var b = c.Budget(null)!;
+        Assert.Equal(7 * (window - 1), b.FutureDays.Count);
+
+        // For the last planned week, the window of `window` weeks ending there (logged days before today,
+        // planned days from today on) averages the target: eaten total == target total, up to rounding.
+        var lastMonday = MondayOf(FixtureLoader.Today).AddDays(7 * (window - 1));
+        var counted = StatsCalculator.Range(lastMonday.AddDays(-7 * (window - 1)), lastMonday.AddDays(6))
+            .Where(d => d >= FixtureLoader.Today || c.IsLogged(d)).ToList();
+        var eaten = counted.Sum(d => d < FixtureLoader.Today ? c.Calories(d)!.Value : (b.Days.TryGetValue(d, out var x) ? x : b.FutureDays[d]));
+        var targets = counted.Sum(d => c.Target(d) ?? 0);
+        Assert.InRange(Math.Abs(eaten - targets), 0, counted.Count);   // rounding of each day to whole kcal
+    }
+
+    [Fact]
+    public void AWeekThatWasWayOver_KeepsPullingTheNextWeeksDown_UntilItLeavesTheWindow()
+    {
+        // window 3: everything over by a lot in the last two weeks
+        var c = FixtureLoader.Calc(3, days =>
+        {
+            for (var d = D("2026-11-09"); d < FixtureLoader.Today; d = d.AddDays(1))
+                days[d] = new DayData(d, null, 6000, null, false, false);
+        });
+        var b = c.Budget(null)!;
+        Assert.All(b.Days.Values, v => Assert.Equal(0, v));                                 // this week: nothing left
+        Assert.All(b.FutureDays.Where(p => p.Key < D("2026-12-07")).Select(p => p.Value), v => Assert.Equal(0, v));   // next week still in debt
+        // the week after, the 9 Nov week has left the window: budget is back near the target, not a huge credit
+        var week2 = b.FutureDays.Where(p => p.Key >= D("2026-12-07")).Select(p => p.Value).ToList();
+        Assert.All(week2, v => Assert.InRange(v, 0, 2 * 1850));
+    }
+
+    [Fact]
+    public void FutureLogsTheUserTyped_AreKeptAsTyped()
+    {
+        var day = D("2026-12-02");
+        var c = FixtureLoader.Calc(2, days => days[day] = new DayData(day, null, 2600, FixtureLoader.Today, false, false));
+        var b = c.Budget(null)!;
+        Assert.Equal(2600, b.FutureDays[day]);
+        Assert.NotEqual(2600, b.FutureDays[D("2026-12-03")]);
+    }
+
+    [Fact]
+    public void NoTarget_NoFutureDays()
+    {
+        var c = new StatsCalculator(new StatsData { Today = FixtureLoader.Today, Days = new Dictionary<DateOnly, DayData>(), Window = 3 });
+        Assert.Null(c.Budget(null));
+    }
+}

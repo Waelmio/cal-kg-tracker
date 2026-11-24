@@ -110,6 +110,8 @@ export interface Budget {
   expectedAverage: number
   expectedDeficitKcal: number | null
   days: PlannedDay[]
+  /** The next weeks, planned the same way (as far as the averaging window reaches). */
+  futureDays: PlannedDay[]
 }
 
 export interface StreakRow {

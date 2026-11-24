@@ -72,7 +72,8 @@ public class StatsService(AppDbContext db) : IStatsService
                 budget.TodayBudget, eaten, eaten is null ? null : budget.TodayBudget - eaten.Value,
                 wk.AvgCalories is null ? null : Rnd(wk.AvgCalories.Value), wk.AvgTarget is null ? null : Rnd(wk.AvgTarget.Value),
                 Rnd(expectedTotal / 7.0), expectedDeficit,
-                budget.Days.Select(p => new PlannedDayDto(Fmt(p.Key), p.Value, budget.UserLogged.Contains(p.Key))).ToList());
+                budget.Days.Select(p => new PlannedDayDto(Fmt(p.Key), p.Value, budget.UserLogged.Contains(p.Key))).ToList(),
+                budget.FutureDays.Select(p => new PlannedDayDto(Fmt(p.Key), p.Value, c.Calories(p.Key) is not null)).ToList());
         }
 
         // Streak
@@ -189,10 +190,10 @@ public class StatsService(AppDbContext db) : IStatsService
             c.Data.Days.TryGetValue(d, out var day);
             int? planned = null;
             var plannedLogged = false;
-            if (budget is not null && budget.Days.TryGetValue(d, out var b) && d >= today)
+            if (budget is not null && d >= today)
             {
-                planned = b;
-                plannedLogged = budget.UserLogged.Contains(d);
+                if (budget.Days.TryGetValue(d, out var b)) { planned = b; plannedLogged = budget.UserLogged.Contains(d); }
+                else if (budget.FutureDays.TryGetValue(d, out var f)) { planned = f; plannedLogged = c.Calories(d) is not null; }
             }
             return new CalendarDayDto(
                 Fmt(d), day?.Calories, c.Target(d), Status(c.DayStatus(d)), planned, plannedLogged, c.InGoal(d),
