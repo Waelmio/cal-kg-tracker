@@ -89,8 +89,14 @@ public sealed class StatsCalculator(StatsData data)
 
     public int? Calories(DateOnly d) => data.Days.TryGetValue(d, out var x) ? x.Calories : null;
 
-    /// <summary>Logged day: before today, calories not null (0 counts). Today is in progress.</summary>
-    public bool IsLogged(DateOnly d) => d < data.Today && Calories(d) is not null;
+    /// <summary>
+    /// Logged day: up to today, calories not null (0 counts). Today counts as soon as it is logged: a day is
+    /// normally logged once, when it is over. A future day that is logged counts when it comes.
+    /// </summary>
+    public bool IsLogged(DateOnly d) => d <= data.Today && Calories(d) is not null;
+
+    /// <summary>The last day the figures cover: today once it is logged, yesterday until then.</summary>
+    public DateOnly LastDay => IsLogged(data.Today) ? data.Today : data.Today.AddDays(-1);
 
     public List<DateOnly> Logged(DateOnly from, DateOnly to) => Range(from, to).Where(IsLogged).ToList();
 
@@ -181,14 +187,15 @@ public sealed class StatsCalculator(StatsData data)
     public sealed record BudgetResult(
         IReadOnlyDictionary<DateOnly, int> Days,        // today..Sunday, rounded, planned days included
         IReadOnlySet<DateOnly> UserLogged,              // future days the user logged (kept as typed)
-        int TodayBudget,
+        int TodayBudget,                                // today's share, whether or not it is logged
+        int PerDay,                                     // the budget of the days to come, today included until it is logged
         double TodayExact,                              // the same, before rounding
         double Pool,                                    // what all the free days (today included) share, before clamping
         bool ReachesTarget,                             // false when even this plan leaves the window over target
         IReadOnlyDictionary<DateOnly, int> FutureDays); // the next Window-1 weeks (see FutureBudget)
 
-    /// <param name="eatenToday">Calories eaten today; if they exceed today's budget, today is treated as fixed at that amount.</param>
-    public BudgetResult? Budget(int? eatenToday)
+    /// <summary>Until today is logged it counts as its budget. Once it is, the other days share what it left.</summary>
+    public BudgetResult? Budget()
     {
         var today = data.Today;
         if (Target(today) is null) return null;
@@ -215,9 +222,9 @@ public sealed class StatsCalculator(StatsData data)
         var free = rest.Where(d => !planned.ContainsKey(d)).ToList();
         var result = Solve(free, planned.Values.Sum());
         var todayBudget = result[today];
-        var todayEaten = todayBudget;   // what today counts for: its full budget until that is exceeded
+        var todayEaten = todayBudget;
 
-        if (eatenToday is { } eaten && eaten > todayBudget)
+        if (Calories(today) is { } eaten)
         {
             todayEaten = eaten;
             result = Solve(free.Where(d => d != today).ToList(), planned.Values.Sum() + eaten);
@@ -231,7 +238,8 @@ public sealed class StatsCalculator(StatsData data)
         var days = new SortedDictionary<DateOnly, int>();
         foreach (var d in rest) days[d] = Rnd(planned.TryGetValue(d, out var typed) ? typed : result[d]);
 
-        return new BudgetResult(days, planned.Keys.ToHashSet(), Rnd(todayBudget), todayBudget,
+        var next = IsLogged(today) ? free.FirstOrDefault(d => d > today, today) : today;
+        return new BudgetResult(days, planned.Keys.ToHashSet(), Rnd(todayBudget), days[next], todayBudget,
             targets - eatenPast - planned.Values.Sum(), reaches, FutureBudget(monday, simulated));
     }
 

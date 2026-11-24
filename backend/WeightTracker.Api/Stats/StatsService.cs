@@ -59,7 +59,7 @@ public class StatsService(AppDbContext db) : IStatsService
 
         // Budget
         int? eaten = c.Calories(today);
-        var budget = c.Budget(eaten);
+        var budget = c.Budget();
         BudgetDto? budgetDto = null;
         int? expectedDeficit = null;
         if (budget is not null)
@@ -69,11 +69,11 @@ public class StatsService(AppDbContext db) : IStatsService
             var logged = c.Logged(monday, today.AddDays(-1));
             var counted = logged.Concat(budget.Days.Keys).ToList();
             var expectedTotal = logged.Sum(d => c.Calories(d)!.Value)
-                                + budget.Days.Sum(p => p.Key == today ? Math.Max(p.Value, eaten ?? 0) : p.Value);
+                                + budget.Days.Sum(p => p.Key == today ? eaten ?? p.Value : p.Value);
             if (counted.All(d => c.Tdee(d) is not null)) expectedDeficit = counted.Sum(d => c.Tdee(d)!.Value) - expectedTotal;
 
             budgetDto = new BudgetDto(
-                budget.TodayBudget, eaten, eaten is null ? null : budget.TodayBudget - eaten.Value,
+                budget.TodayBudget, budget.PerDay, eaten, eaten is null ? null : budget.TodayBudget - eaten.Value,
                 wk.AvgCalories is null ? null : Rnd(wk.AvgCalories.Value), wk.AvgTarget is null ? null : Rnd(wk.AvgTarget.Value),
                 Rnd((double)expectedTotal / counted.Count), expectedDeficit, budget.ReachesTarget,
                 budget.Days.Select(p => new PlannedDayDto(Fmt(p.Key), p.Value, budget.UserLogged.Contains(p.Key))).ToList(),
@@ -84,7 +84,7 @@ public class StatsService(AppDbContext db) : IStatsService
         var streak = c.Streak();
         var rows = new[] { 7, 14, 21 }.Select(n =>
         {
-            var days = c.Logged(today.AddDays(-n), today.AddDays(-1));
+            var days = c.Logged(c.LastDay.AddDays(1 - n), c.LastDay);
             return days.Count == 0
                 ? new StreakRowDto(n, null, null)
                 : new StreakRowDto(n, Rnd(days.Average(d => (double)c.Calories(d)!.Value)), Rnd((double)c.Gap(days) / days.Count));
@@ -95,10 +95,10 @@ public class StatsService(AppDbContext db) : IStatsService
             expectedDeficit is null ? null : expectedDeficit / KcalPerKg, wk.LoggedDays);
         OverallDeficitDto overall;
         // Once the goal's date has passed the app is tracking-only until the user chooses what is next.
-        if (activeGoal is not null && activeGoal.StartDate < today && goalStatus?.State != "datePassed")
+        if (activeGoal is not null && activeGoal.StartDate <= c.LastDay && goalStatus?.State != "datePassed")
         {
-            var p = c.Period(activeGoal.StartDate, today.AddDays(-1));
-            overall = new OverallDeficitDto(p.Deficit, p.Deficit / KcalPerKg, p.Gap, p.LoggedDays, today.DayNumber - activeGoal.StartDate.DayNumber, Fmt(activeGoal.StartDate), true);
+            var p = c.Period(activeGoal.StartDate, c.LastDay);
+            overall = new OverallDeficitDto(p.Deficit, p.Deficit / KcalPerKg, p.Gap, p.LoggedDays, c.LastDay.DayNumber - activeGoal.StartDate.DayNumber + 1, Fmt(activeGoal.StartDate), true);
         }
         else
         {
@@ -155,7 +155,7 @@ public class StatsService(AppDbContext db) : IStatsService
         return Enumerable.Range(1, 5).Select(w =>
         {
             var calc = new StatsCalculator(c.Data.WithWindow(w));
-            return new BudgetByWindowDto(w, calc.Budget(calc.Calories(today))?.TodayBudget);
+            return new BudgetByWindowDto(w, calc.Budget()?.PerDay);
         }).ToList();
     }
 
@@ -188,7 +188,7 @@ public class StatsService(AppDbContext db) : IStatsService
     public async Task<CalendarDto> CalendarAsync(DateOnly from, DateOnly to, DateOnly today)
     {
         var (c, _, _) = await LoadAsync(today);
-        var budget = c.Budget(c.Calories(today));
+        var budget = c.Budget();
 
         var days = Range(from, to).Select(d =>
         {
@@ -215,7 +215,7 @@ public class StatsService(AppDbContext db) : IStatsService
     {
         var (c, _, _) = await LoadAsync(today);
         var monday = MondayOf(date);
-        var budget = c.Budget(c.Calories(today));
+        var budget = c.Budget();
         var weighIns = c.Data.Days.Values.Where(x => x.WeightKg is not null).OrderByDescending(x => x.Date).ToList();
 
         var days = Range(monday, monday.AddDays(6)).Select(d =>
@@ -275,7 +275,7 @@ public class StatsService(AppDbContext db) : IStatsService
 
         return new MonthSummaryDto(
             firstOfMonth.ToString("yyyy-MM", CultureInfo.InvariantCulture), figures, last.Day,
-            inMonth.Count(d => d.IsCheatDay && d.Calories is not null && d.Date < today),
+            inMonth.Count(d => d.IsCheatDay && c.IsLogged(d.Date)),
             prev.AvgWeightKg, weighed.FirstOrDefault()?.WeightKg, weighed.LastOrDefault()?.WeightKg,
             weeks, est is null ? null : ToDto(est));
     }

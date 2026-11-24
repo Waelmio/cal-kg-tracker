@@ -9,7 +9,7 @@ public abstract class StatsEndpointTestsBase
     protected abstract WebApplicationFactory<Program> Factory { get; }
     private const string Today = "2026-11-24";
 
-    private async Task<HttpClient> LoadFixtureAsync(int? averagingWeeks = null)
+    private async Task<HttpClient> LoadFixtureAsync(int? averagingWeeks = null, bool todayLogged = false)
     {
         var client = Factory.CreateClient();
         using (var scope = Factory.Services.CreateScope())
@@ -18,6 +18,8 @@ public abstract class StatsEndpointTestsBase
         var json = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "fixture.json"));
         var response = await client.PostAsync("/api/data/import", new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
         response.EnsureSuccessStatusCode();
+        // 3.11 is the state before today is logged (the fixture has 1240 for it).
+        if (!todayLogged) (await client.DeleteAsync($"/api/daily-logs/{Today}")).EnsureSuccessStatusCode();
         if (averagingWeeks is not null)
         {
             var r = await client.PutAsJsonAsync("/api/settings", new { heightCm = 178, preferredUnit = "kg", averagingWeeks });
@@ -52,7 +54,7 @@ public abstract class StatsEndpointTestsBase
     {
         var client = await LoadFixtureAsync();
         var r = await Get(client, $"/api/stats/budget-by-window?today={Today}");
-        Assert.Equal(new[] { 1877, 1881, 1786, 1605, 1483 }, r.EnumerateArray().Select(x => x.GetProperty("todayBudget").GetInt32()).ToArray());
+        Assert.Equal(new[] { 1877, 1881, 1786, 1605, 1483 }, r.EnumerateArray().Select(x => x.GetProperty("perDay").GetInt32()).ToArray());
     }
 
     [Fact]
@@ -178,6 +180,31 @@ public abstract class StatsEndpointTestsBase
         Assert.Equal(0.53, Math.Round(goal.GetProperty("neededKgPerWeek").GetDouble(), 2));
         Assert.Equal("2027-03-07", goal.GetProperty("projectedDate").GetString());
         Assert.Equal(3, goal.GetProperty("lateWeeks").GetInt32());
+    }
+
+    [Fact]
+    public async Task Dashboard_WithTodayLogged_CountsItEverywhere()
+    {
+        // reference.py, "Today logged at 1240"
+        var client = await LoadFixtureAsync(todayLogged: true);
+        var d = await Get(client, $"/api/stats/dashboard?today={Today}");
+
+        var b = d.GetProperty("budget");
+        Assert.Equal((1881, 641, 2009), (b.GetProperty("todayBudget").GetInt32(), b.GetProperty("todayLeft").GetInt32(), b.GetProperty("perDay").GetInt32()));
+        Assert.Equal(1465, b.GetProperty("averageSoFar").GetInt32());
+        Assert.Equal((int)Math.Round((1689 + 1240 + 5 * 2009) / 7.0), b.GetProperty("expectedAverage").GetInt32());
+
+        var weekly = d.GetProperty("deficits").GetProperty("weekly");
+        Assert.Equal((1771, 2), (weekly.GetProperty("kcal").GetInt32(), weekly.GetProperty("loggedDays").GetInt32()));
+        var overall = d.GetProperty("deficits").GetProperty("overall");
+        Assert.Equal((27949, 1751, 68, 76), (overall.GetProperty("kcal").GetInt32(), overall.GetProperty("gapKcal").GetInt32(), overall.GetProperty("loggedDays").GetInt32(), overall.GetProperty("totalDays").GetInt32()));
+        var streak = d.GetProperty("streak");
+        Assert.Equal((17, 235), (streak.GetProperty("days").GetInt32(), streak.GetProperty("nextGap").GetInt32()));
+        var last7 = streak.GetProperty("rows")[0];
+        Assert.Equal((1775, -75), (last7.GetProperty("avgCalories").GetInt32(), last7.GetProperty("avgGap").GetInt32()));
+
+        var day = (await Get(client, $"/api/stats/calendar?from={Today}&to={Today}&today={Today}")).GetProperty("days")[0];
+        Assert.Equal("under", day.GetProperty("status").GetString());
     }
 
     [Fact]

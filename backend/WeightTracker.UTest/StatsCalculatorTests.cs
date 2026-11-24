@@ -9,7 +9,7 @@ public class StatsCalculatorTests
     private static DateOnly D(string s) => DateOnly.Parse(s);
     private static readonly DateOnly Today = FixtureLoader.Today;
 
-    private static int[] BudgetValues(StatsCalculator c, int? eaten = null) => c.Budget(eaten)!.Days.Values.ToArray();
+    private static int[] BudgetValues(StatsCalculator c) => c.Budget()!.Days.Values.ToArray();
 
     [Theory]
     [InlineData(1, 1877)]
@@ -19,13 +19,13 @@ public class StatsCalculatorTests
     [InlineData(5, 1483)]
     public void TodaysBudget_ByWindow(int window, int expected)
     {
-        Assert.Equal(expected, FixtureLoader.Calc(window).Budget(null)!.TodayBudget);
+        Assert.Equal(expected, FixtureLoader.Calc(window).Budget()!.TodayBudget);
     }
 
     [Fact]
     public void Window2_TodayEaten2400_OtherDaysGetLess()
     {
-        var b = FixtureLoader.Calc(2).Budget(2400)!;
+        var b = FixtureLoader.Calc(2, days => days[Today] = new DayData(Today, null, 2400, Today, false)).Budget()!;
         Assert.Equal(1881, b.TodayBudget);
         Assert.All(b.Days.Where(p => p.Key > Today), p => Assert.Equal(1777, p.Value));
     }
@@ -35,7 +35,7 @@ public class StatsCalculatorTests
     {
         var saturday = D("2026-11-28");
         var calc = FixtureLoader.Calc(2, days => days[saturday] = new DayData(saturday, null, 2500, Today, false));
-        var b = calc.Budget(null)!;
+        var b = calc.Budget()!;
         Assert.Equal(2500, b.Days[saturday]);
         Assert.Contains(saturday, b.UserLogged);
         Assert.All(b.Days.Where(p => p.Key != saturday), p => Assert.Equal(1757, p.Value));
@@ -183,7 +183,7 @@ public class StatsCalculatorTests
     public void EmptyDatabase_NothingThrows()
     {
         var c = Empty(target: null, tdee: null);
-        Assert.Null(c.Budget(null));
+        Assert.Null(c.Budget());
         Assert.Null(c.Weight());
         Assert.Equal(0, c.Streak().Days);
         Assert.Null(c.Pace().KgPerDay);
@@ -195,7 +195,7 @@ public class StatsCalculatorTests
     public void NoTarget_NoBudgetNoStatus()
     {
         var c = Empty(d => d[D("2026-11-20")] = Cal("2026-11-20", 2500), target: null);
-        Assert.Null(c.Budget(null));
+        Assert.Null(c.Budget());
         Assert.Null(c.DayStatus(D("2026-11-20")));
         Assert.Null(c.WeekStatusOf(D("2026-11-16")));
     }
@@ -216,12 +216,42 @@ public class StatsCalculatorTests
         Assert.Equal(WeekStatus.Under, c.DayStatus(D("2026-11-20")));
     }
 
+    private static StatsCalculator TodayLogged(int window = 2) =>
+        FixtureLoader.Calc(window, days => days[Today] = new DayData(Today, null, 1240, Today, false));
+
     [Fact]
-    public void Today_IsNeverLogged()
+    public void Today_CountsAsSoonAsItIsLogged()
     {
-        var c = Empty(d => d[Today] = Cal("2026-11-24", 3000));
-        Assert.False(c.IsLogged(Today));
-        Assert.Equal(0, c.Period(MondayOf(Today), Today).LoggedDays);
+        Assert.False(FixtureLoader.Calc().IsLogged(Today));
+        Assert.Null(FixtureLoader.Calc().DayStatus(Today));
+
+        var c = TodayLogged();
+        Assert.Equal(Today, c.LastDay);
+        Assert.Equal(WeekStatus.Under, c.DayStatus(Today));
+        var w = c.Week(MondayOf(Today));
+        Assert.Equal((2, 1465, -771, 1771), (w.LoggedDays, Rnd(w.AvgCalories!.Value), w.Gap, w.Deficit));
+    }
+
+    [Theory]     // reference.py, "Today logged at 1240"
+    [InlineData(2, 2009)]
+    [InlineData(3, 1895)]
+    public void TodayLogged_TheOtherDaysShareWhatItLeft(int window, int others)
+    {
+        var b = TodayLogged(window).Budget()!;
+        Assert.Equal(window == 2 ? 1881 : 1786, b.TodayBudget);      // what it was before logging
+        Assert.Equal(others, b.PerDay);
+        Assert.All(b.Days.Where(p => p.Key > Today), p => Assert.Equal(others, p.Value));
+    }
+
+    [Fact]
+    public void PerDay_OnALoggedSunday_IsTodaysBudget()
+    {
+        var sunday = D("2026-11-29");
+        var b = new StatsCalculator(new StatsData
+        {
+            Today = sunday, Days = new Dictionary<DateOnly, DayData> { [sunday] = new(sunday, null, 1500, null, false) }, Targets = [(D("2026-01-01"), 1800)],
+        }).Budget()!;
+        Assert.Equal(1800, b.PerDay);
     }
 
     [Fact]
@@ -230,7 +260,7 @@ public class StatsCalculatorTests
         var saturday = D("2026-11-28");
         var c = Empty(d => d[saturday] = Cal("2026-11-28", 3000));
         Assert.False(c.IsLogged(saturday));
-        Assert.Equal(3000, c.Budget(null)!.Days[saturday]);
+        Assert.Equal(3000, c.Budget()!.Days[saturday]);
 
         // a week later the same row is a real logged day
         var later = new StatsCalculator(new StatsData
@@ -271,7 +301,7 @@ public class StatsCalculatorTests
         });
         Assert.Equal(2000, c.Target(D("2026-11-09")));
         Assert.Null(c.Target(D("2026-11-10")));
-        Assert.Null(c.Budget(null));
+        Assert.Null(c.Budget());
     }
 
     [Fact]
@@ -282,7 +312,7 @@ public class StatsCalculatorTests
         {
             for (var i = 16; i <= 23; i++) d[D($"2026-11-{i}")] = Cal($"2026-11-{i}", 6000);
         });
-        Assert.All(c.Budget(null)!.Days.Values, v => Assert.Equal(0, v));
+        Assert.All(c.Budget()!.Days.Values, v => Assert.Equal(0, v));
     }
 
     [Fact]
@@ -309,7 +339,7 @@ public class FutureBudgetTests
     [Fact]
     public void Window1_PlansNothingBeyondThisWeek()
     {
-        Assert.Empty(FixtureLoader.Calc(1).Budget(null)!.FutureDays);
+        Assert.Empty(FixtureLoader.Calc(1).Budget()!.FutureDays);
     }
 
     [Theory]
@@ -319,7 +349,7 @@ public class FutureBudgetTests
     public void PlansWindowMinusOneWeeksAhead_EveryWindowOnTarget_NeverAboveTheTarget(int window)
     {
         var c = FixtureLoader.Calc(window);
-        var b = c.Budget(null)!;
+        var b = c.Budget()!;
         Assert.Equal(7 * (window - 1), b.FutureDays.Count);
         Assert.Equal(D("2026-11-30"), b.FutureDays.Keys.Min());
         Assert.All(b.FutureDays, p => Assert.InRange(p.Value, 0, c.Target(p.Key)!.Value));
@@ -344,7 +374,7 @@ public class FutureBudgetTests
     public void PayingBackAWeek_DoesNotHandTheCaloriesBackTheWeekAfter()
     {
         // 8 days at 2250: 3200 over, which this week's 6 days absorb in full.
-        var b = Overate(2, 2250).Budget(null)!;
+        var b = Overate(2, 2250).Budget()!;
         Assert.True(b.ReachesTarget);
         Assert.Equal(1850 - 3200 / 6.0, b.TodayBudget, 0.5);
         // Without the cap, next week would be planned as far above the target as this one is below it.
@@ -355,7 +385,7 @@ public class FutureBudgetTests
     public void ADebtThisWeekCannotAbsorb_LowersTheNextWeeks_UntilItLeavesTheWindow()
     {
         // 8 days at 4000: 17200 over. Six days at 0 absorb 11100, so 6100 are left for next week: 871 a day less.
-        var b = Overate(3, 4000).Budget(null)!;
+        var b = Overate(3, 4000).Budget()!;
         Assert.False(b.ReachesTarget);
         Assert.All(b.Days.Values, v => Assert.Equal(0, v));
         Assert.All(b.FutureDays.Where(p => p.Key < D("2026-12-07")), p => Assert.InRange(p.Value, 1850 - 872, 1850 - 871));
@@ -369,17 +399,20 @@ public class FutureBudgetTests
     [InlineData(3300)]
     public void ThePlanChangesSmoothly_WhenTheBudgetReachesZero(int kcal)
     {
-        int Next(int k) => Overate(3, k).Budget(null)!.FutureDays[D("2026-11-30")];
+        int Next(int k) => Overate(3, k).Budget()!.FutureDays[D("2026-11-30")];
         Assert.InRange(Next(kcal) - Next(kcal + 10), 0, 12);   // 8 days x 10 kcal over 7 days
     }
 
     [Fact]
     public void ReachesTarget_IsFalse_WhenSundayIsOverBudget()
     {
-        var days = new Dictionary<DateOnly, DayData>();
-        var c = new StatsCalculator(new StatsData { Today = D("2026-11-29"), Days = days, Targets = [(D("2026-01-01"), 1800)] });
-        Assert.True(c.Budget(1800)!.ReachesTarget);
-        Assert.False(c.Budget(2500)!.ReachesTarget);
+        var sunday = D("2026-11-29");
+        bool Reaches(int kcal) => new StatsCalculator(new StatsData
+        {
+            Today = sunday, Days = new Dictionary<DateOnly, DayData> { [sunday] = new(sunday, null, kcal, null, false) }, Targets = [(D("2026-01-01"), 1800)],
+        }).Budget()!.ReachesTarget;
+        Assert.True(Reaches(1800));
+        Assert.False(Reaches(2500));
     }
 
     [Fact]
@@ -387,7 +420,7 @@ public class FutureBudgetTests
     {
         var day = D("2026-12-02");
         var c = FixtureLoader.Calc(2, days => days[day] = new DayData(day, null, 2600, FixtureLoader.Today, false));
-        var b = c.Budget(null)!;
+        var b = c.Budget()!;
         Assert.Equal(2600, b.FutureDays[day]);
         Assert.Equal(1850 - (750 + 28) / 6.0, b.FutureDays[D("2026-12-03")], 1.5);   // 750 over, plus this week's 28
     }
@@ -396,6 +429,6 @@ public class FutureBudgetTests
     public void NoTarget_NoFutureDays()
     {
         var c = new StatsCalculator(new StatsData { Today = FixtureLoader.Today, Days = new Dictionary<DateOnly, DayData>(), Window = 3 });
-        Assert.Null(c.Budget(null));
+        Assert.Null(c.Budget());
     }
 }

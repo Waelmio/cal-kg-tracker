@@ -30,7 +30,7 @@
         </div>
       </div>
     </div>
-    <p class="note">Bars show the gap to the target. Today and planned days are left out.</p>
+    <p class="note">Bars show the gap to the target. Planned days are left out.</p>
   </section>
 </template>
 

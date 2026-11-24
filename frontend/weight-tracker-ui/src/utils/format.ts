@@ -91,7 +91,7 @@ export const CALENDAR_COLORS = {
 
 /** Days without a status yet: [background, text, border]. A fill always means "logged", a dashed border "planned". */
 export const PENDING_COLORS = {
-  today: ['#e0f2fe', '#075985', '#0369a1'],       // logged today, still in progress
+  today: ['#e0f2fe', '#075985', '#0369a1'],       // logged today, without a target to compare with
   ahead: ['#e2e8f0', '#1e293b', '#64748b'],       // a future day that is already logged
   planned: ['#ffffff', '#6b7280', '#9ca3af'],
 } as const

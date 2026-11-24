@@ -177,7 +177,7 @@ describe('LogSheet', () => {
 
   it('shows what the rest of the week gets, as the server shares it', async () => {
     await open({ calories: 1240 })
-    expect(document.body.textContent).toContain('Rest of the week: 1881 a day')
+    expect(document.body.textContent).toContain('Rest of the week: 2009 a day')   // (11286 - 1240) / 5
     await type('#kcal', '2400')
     expect(document.body.textContent).toContain('Rest of the week: 1777 a day')   // (11286 - 2400) / 5
   })
@@ -187,14 +187,16 @@ describe('LogSheet', () => {
     const others = Object.fromEntries(['25', '26', '27', '28', '29'].map((d) => [`2026-11-${d}`, { planned: 1777 }]))
     await open({ calories: 2400 }, others)
     expect(document.body.textContent).toContain('Rest of the week: 1777 a day')
-    await type('#kcal', '1500')
+    await type('#kcal', '1881')
     expect(document.body.textContent).toContain('Rest of the week: 1881 a day')
   })
 
-  it('the cheat day switch moves the budget, not the other days', async () => {
+  it('the cheat day switch moves the budget, and what the other days get by the same amount', async () => {
     await open({ calories: 1240 })
     q('#cheat').click(); await flushPromises()
     expect(hint()).toBe('1141 left of 2381')
+    expect(document.body.textContent).toContain('Rest of the week: 2109 a day')   // (11286 + 500 - 1240) / 5
+    await type('#kcal', '2381')
     expect(document.body.textContent).toContain('Rest of the week: 1881 a day')
     await type('#kcal', '2881')
     expect(document.body.textContent).toContain('Rest of the week: 1781 a day')   // (11286 + 500 - 2881) / 5

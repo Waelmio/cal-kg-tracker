@@ -80,7 +80,7 @@ import { localToday } from '../utils/dates'
 
 const app = useAppStore()
 const form = reactive({ heightCm: null as number | null, preferredUnit: 'kg' as 'kg' | 'lbs', averagingWeeks: 2 })
-const budgets = ref<{ weeks: number; todayBudget: number | null }[]>([])
+const budgets = ref<{ weeks: number; perDay: number | null }[]>([])
 const saving = ref(false)
 const saved = ref(false)
 const saveError = ref('')
@@ -93,7 +93,7 @@ const confirmClear = ref(false)
 const clearing = ref(false)
 const cleared = ref(false)
 
-const previewBudget = computed(() => budgets.value.find((b) => b.weeks === form.averagingWeeks)?.todayBudget ?? null)
+const previewBudget = computed(() => budgets.value.find((b) => b.weeks === form.averagingWeeks)?.perDay ?? null)
 
 onMounted(async () => {
   if (!app.loaded) await app.loadSettings().catch(() => {})

@@ -20,11 +20,11 @@
 
     <!-- Budget this week -->
     <Tile title="Budget this week">
-      <template v-if="s.budget" #value><div class="big">{{ kcal(s.budget.todayBudget) }} <span class="unit">kcal a day</span></div></template>
+      <template v-if="s.budget" #value><div class="big">{{ kcal(s.budget.perDay) }} <span class="unit">kcal a day</span></div></template>
       <template #sub><p class="tile-sub">{{ !s.budget ? 'No calorie target' : s.budget.reachesTarget ? `Keeps your ${averageName} at ${kcal(s.calorieTarget)}` : `Too far over to average ${kcal(s.calorieTarget)} this week` }}</p></template>
       <template v-if="s.budget">
         <TileRow>
-          <template #label><InfoTip label="Average so far" text="Logged days this week. Today isn't counted yet." /></template>
+          <template #label><InfoTip label="Average so far" text="Logged days this week. Today counts once it is logged." /></template>
           <span :style="{ color: avgColor }">{{ kcal(s.budget.averageSoFar) }}</span>
         </TileRow>
         <TileRow>

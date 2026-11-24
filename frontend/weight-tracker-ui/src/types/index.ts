@@ -103,6 +103,8 @@ export interface PlannedDay {
 
 export interface Budget {
   todayBudget: number
+  /** Budget of the days to come, today included until it is logged. */
+  perDay: number
   eatenToday: number | null
   todayLeft: number | null
   averageSoFar: number | null

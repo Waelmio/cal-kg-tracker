@@ -20,6 +20,7 @@ public record PlannedDayDto(string Date, int Kcal, bool UserLogged);
 
 public record BudgetDto(
     int TodayBudget,
+    int PerDay,              // of the days to come, today included until it is logged
     int? EatenToday,
     int? TodayLeft,
     int? AverageSoFar,
@@ -77,7 +78,7 @@ public record TargetComparisonDto(
 /// <summary>A weigh-in with the 7-day average ending that day. Starts at the goal's start date (else 90 days back).</summary>
 public record WeightPointDto(string Date, double Kg, double Avg7);
 
-public record BudgetByWindowDto(int Weeks, int? TodayBudget);
+public record BudgetByWindowDto(int Weeks, int? PerDay);
 
 public record CalendarDayDto(
     string Date,

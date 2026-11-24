@@ -22,6 +22,7 @@ public static class FixtureLoader
         var days = f.DailyLogs.ToDictionary(
             l => DateOnly.Parse(l.Date),
             l => new DayData(DateOnly.Parse(l.Date), (double?)l.WeightKg, l.CaloriesKcal, null, l.IsCheatDay, l.Notes));
+        days.Remove(Today);      // 3.11 is the state before today is logged; tests add it back
         edit?.Invoke(days);
         var first = days.Keys.Min();
         var goal = f.Goals[0];

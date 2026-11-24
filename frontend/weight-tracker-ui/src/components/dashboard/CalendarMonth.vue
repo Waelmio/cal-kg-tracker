@@ -39,7 +39,7 @@
       <li><i :style="{ background: STATUS_COLORS.balanced.solid }" /><InfoTip :label="`Over, ${app.settings.averagingWeeks}-week average ok`" text="Over target, but fine averaged with the weeks around it." /></li>
       <li><i :style="{ background: STATUS_COLORS.over.solid }" />Over target</li>
       <li><i class="dash" /><InfoTip label="Planned" text="Your budget. Doesn't count until you log it." /></li>
-      <li><i class="ahead" /><InfoTip label="Logged ahead" text="A future day you already logged. Counts once the day has passed." /></li>
+      <li><i class="ahead" /><InfoTip label="Logged ahead" text="A future day you already logged. Counts when the day comes." /></li>
       <li><i class="light" /><InfoTip label="Lighter: outside the goal" text="Outside your current goal." /></li>
     </ul>
   </section>
@@ -85,7 +85,7 @@ function dayStyle(date: string, d: CalendarDay | undefined) {
   if (!d) return base
   if (d.calories != null && d.status) {
     const [bg, fg] = CALENDAR_COLORS[d.inGoal ? 'day' : 'dayOut'][d.status]
-    return { background: bg, color: fg, border: '1px solid transparent' }
+    return { background: bg, color: fg, border: date === app.today ? `2px solid ${PENDING_COLORS.today[2]}` : '1px solid transparent' }
   }
   if (date === app.today) {
     const [bg, fg, line] = PENDING_COLORS.today
@@ -135,7 +135,7 @@ const rows = computed(() => {
         title: [d?.target != null ? `Target ${d.target} kcal` : '', d?.planned != null && !logged ? 'Planned from your budget' : '', d?.notes ?? ''].filter(Boolean).join('\n'),
         label: [
           longDate(date),
-          logged ? `${d!.calories} kcal${isToday ? ', logged, in progress' : date > app.today ? ', logged ahead' : d!.status ? ', ' + statusText(d!.status).toLowerCase() : ''}` : d?.planned != null ? `planned ${d.planned} kcal` : 'not logged',
+          logged ? `${d!.calories} kcal${date > app.today ? ', logged ahead' : d!.status ? ', ' + statusText(d!.status).toLowerCase() : ''}` : d?.planned != null ? `planned ${d.planned} kcal` : 'not logged',
           d?.weightKg != null ? weight(d.weightKg, app.unit, true) : '',
           d?.isCheatDay ? 'cheat day' : '',
           d?.notes ? `note: ${d.notes}` : '',

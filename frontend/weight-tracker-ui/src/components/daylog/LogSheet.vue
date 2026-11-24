@@ -207,13 +207,12 @@ const budget = computed(() => {
   return Math.max(0, d.planned + cheatChange.value)
 })
 
-// Same rule as the server's budget: today counts as its full budget until it is exceeded, and what is left of
-// the pool is shared by the other free days.
+// Same rule as the server's budget: what today leaves of the pool is shared by the other free days. Until
+// something is typed, today counts as its budget.
 const restOfWeek = computed<number | null>(() => {
   const w = filled.value?.week.thisWeek
   if (!isToday.value || !w || w.otherDays === 0 || budget.value == null || day.value == null) return null
-  const eaten = kcalValue.value ?? 0
-  const today = eaten > budget.value ? eaten : w.todayBudget + cheatChange.value
+  const today = kcalValue.value ?? w.todayBudget + cheatChange.value
   return Math.max(0, Math.round((w.pool + cheatChange.value - today) / w.otherDays))
 })
 
