@@ -12,9 +12,21 @@
     </template>
 
     <ErrorNote v-if="error" :message="error" :retry="reload" />
-    <p v-else-if="loading && !data" class="muted" aria-busy="true">Loading…</p>
 
-    <div v-if="data" class="content">
+    <div v-else-if="!data" class="content" data-test="skeleton" aria-busy="true" :aria-label="`Loading ${title}`">
+      <div class="cards">
+        <section v-for="i in 3" :key="i" class="c">
+          <Skeleton width="30%" height="14px" />
+          <Skeleton width="70%" height="31px" />
+          <Skeleton v-for="r in 3" :key="r" height="24px" />
+        </section>
+      </div>
+      <div class="perday"><Skeleton width="50%" height="14px" /><Skeleton height="162px" /><Skeleton width="60%" height="16px" /></div>
+      <div class="weeks"><Skeleton v-for="i in 7" :key="i" height="30px" /></div>
+      <Skeleton width="70%" height="20px" />
+    </div>
+
+    <div v-else class="content">
       <p v-if="f.loggedDays === 0" class="muted">Nothing logged in {{ title }}.</p>
 
       <div class="cards">
@@ -98,6 +110,7 @@
 import { computed, toRef } from 'vue'
 import Modal from '../ui/Modal.vue'
 import ErrorNote from '../ui/ErrorNote.vue'
+import Skeleton from '../ui/Skeleton.vue'
 import InfoTip from '../ui/InfoTip.vue'
 import TileRow from '../ui/TileRow.vue'
 import { useAppStore } from '../../stores/app'
@@ -118,7 +131,7 @@ const lastDay = computed(() => Number(lastDayOfMonth(props.month).slice(8)))
 const title = computed(() => monthTitle(props.month))
 const prevMonthName = computed(() => monthTitle(addMonths(props.month, -1)).split(' ')[0])
 
-const { data, loading, error, reload } = useAsyncData(async () => {
+const { data: loaded, error, reload } = useAsyncData(async () => {
   const [summary, calendar] = await Promise.all([
     statsApi.getMonth(props.month),
     statsApi.getCalendar(`${props.month}-01`, lastDayOfMonth(props.month)),
@@ -126,6 +139,8 @@ const { data, loading, error, reload } = useAsyncData(async () => {
   return { ...summary, calendarDays: calendar.days }
 }, [monthRef])
 
+// The figures of another month must not stay under this month's title while it loads.
+const data = computed(() => (loaded.value?.month === props.month ? loaded.value : null))
 const f = computed(() => data.value!.figures)
 
 const days = computed(() => {
@@ -158,6 +173,7 @@ h2 { margin: 0; font-size: 13px; font-weight: 600; color: #4b5563; }
 .big { font-size: 28px; font-weight: 700; line-height: 1.1; }
 .unit { font-size: 14px; font-weight: 400; color: #4b5563; }
 .muted { color: #4b5563; font-weight: 400; }
+.weeks { display: flex; flex-direction: column; gap: 9px; }
 .perday { display: flex; flex-direction: column; gap: 8px; }
 .scroll { overflow-x: auto; }
 .days { min-width: 560px; display: grid; }

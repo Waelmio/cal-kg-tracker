@@ -57,7 +57,7 @@ Controllers are thin. All statistics live in `Stats/`:
 Vue 3 + Pinia. No statistic is computed in the frontend; it formats what `/api/stats/*` returns.
 - `stores/app.ts`: settings, local `today`, and `version`; every mutation calls `refresh()` and views refetch via `composables/useAsyncData.ts`.
 - `stores/logSheet.ts` + `components/daylog/LogSheet.vue`: the single log dialog (full screen below 640 px). Its data is one request per week (`/api/stats/log-week`), kept in `stores/logWeeks.ts` until anything changes (`composables/useKeyedCache.ts`, also behind `stores/calendarMonths.ts`, which preloads the months around the one shown). The "rest of the week" hint is the only figure computed in the UI (on request).
-- `components/ui/`: `Tile`, `TileRow`, `StatusChip`, `InfoTip`, `Modal`, `ErrorNote`.
+- `components/ui/`: `Tile`, `TileRow`, `StatusChip`, `InfoTip`, `Modal`, `ErrorNote`, `Skeleton`.
 - Scoped class names must not be Tailwind utilities (`outline`, `label`, `table`...): Tailwind would style them too.
 - `utils/dates.ts` (local dates), `utils/format.ts` (wording, colors), `utils/units.ts`, `utils/chart.ts` (time-axis geometry).
 

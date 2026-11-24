@@ -16,7 +16,16 @@
     </div>
 
     <ErrorNote v-if="error" :message="error" :retry="reload" />
-    <p v-else-if="!loading && bars.length === 0" class="empty">Nothing logged yet.</p>
+    <div v-else-if="!data" class="scroll" data-test="skeleton" aria-busy="true" aria-label="Loading the averages">
+      <div class="bars" :style="{ minWidth: count * 54 + 'px', gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` }">
+        <div v-for="i in count" :key="i" class="col">
+          <div class="half up"><Skeleton v-if="i % 3" width="24px" :height="`${24 + ((i * 17) % 40)}px`" radius="4px 4px 0 0" /></div>
+          <div class="half down"><Skeleton v-if="!(i % 3)" width="24px" :height="`${24 + ((i * 13) % 40)}px`" radius="0 0 4px 4px" /></div>
+          <div class="texts"><Skeleton width="36px" height="18px" /><Skeleton width="28px" height="12px" /><Skeleton width="44px" height="12px" /></div>
+        </div>
+      </div>
+    </div>
+    <p v-else-if="bars.length === 0" class="empty">Nothing logged yet.</p>
 
     <div v-else class="scroll">
       <div class="bars" :style="{ minWidth: bars.length * 54 + 'px', gridTemplateColumns: `repeat(${bars.length}, minmax(0, 1fr))` }">
@@ -38,6 +47,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import ErrorNote from '../ui/ErrorNote.vue'
+import Skeleton from '../ui/Skeleton.vue'
 import InfoTip from '../ui/InfoTip.vue'
 import { useAppStore } from '../../stores/app'
 import { useAsyncData } from '../../composables/useAsyncData'
@@ -51,7 +61,13 @@ const app = useAppStore()
 const modes = [{ value: 'week', label: 'Weekly' }, { value: 'month', label: 'Monthly' }] as const
 const mode = ref<'week' | 'month'>('week')
 
-const { data, loading, error, reload } = useAsyncData(() => statsApi.getPeriods(mode.value, mode.value === 'week' ? 14 : 6), [mode])
+const count = computed(() => (mode.value === 'week' ? 14 : 6))
+const { data: loaded, error, reload } = useAsyncData(async () => {
+  const asked = mode.value
+  return { mode: asked, periods: await statsApi.getPeriods(asked, count.value) }
+}, [mode])
+// Weeks must not be drawn as months while the months load, or the other way round.
+const data = computed(() => (loaded.value?.mode === mode.value ? loaded.value.periods : null))
 
 // Pixels per kcal of gap. The half height is 96 px with the label on top, so a big gap scales every bar down.
 const ROOM = 74
@@ -104,6 +120,7 @@ h2 { margin: 0; font-size: 16px; font-weight: 600; }
 .col.open:focus-visible { outline: 2px solid #0284c7; outline-offset: -2px; }
 .half { width: 100%; height: 96px; display: flex; flex-direction: column; align-items: center; }
 .half.up { justify-content: flex-end; border-bottom: 1px solid #6b7280; }
+.texts { display: flex; flex-direction: column; align-items: center; gap: 5px; padding-top: 4px; height: 84px; box-sizing: border-box; }
 .bar { width: 24px; }
 .bar.top { border-radius: 4px 4px 0 0; }
 .bar.bottom { border-radius: 0 0 4px 4px; }

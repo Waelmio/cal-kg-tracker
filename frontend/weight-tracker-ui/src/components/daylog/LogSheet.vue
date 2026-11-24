@@ -13,28 +13,28 @@
         <button type="button" class="box" aria-label="Previous week" @click="go(-7)">‹</button>
         <button v-for="d in weekDays" :key="d.date" type="button" class="day" :class="{ plan: d.planned }" :style="d.style" :aria-pressed="d.date === date" @click="select(d.date)">
           <span class="dn">{{ d.name }}</span>
-          <span v-if="ready" class="dk">{{ d.kcal }}</span><span v-else class="skel dk-skel" />
+          <span v-if="ready" class="dk">{{ d.kcal }}</span><Skeleton v-else width="28px" height="12px" style="margin-top: 3px" />
         </button>
         <button type="button" class="box" aria-label="Next week" @click="go(7)">›</button>
       </div>
 
       <ErrorNote v-if="loadError" :message="loadError" :retry="() => store.load(date)" />
 
-      <!-- Nothing cached yet: placeholders with the shape of the form, shimmering -->
+      <!-- Nothing cached yet: placeholders with the shape of the form -->
       <div v-if="!ready" class="cols" data-test="skeleton" aria-busy="true" aria-label="Loading the day">
         <div class="field">
-          <div class="skel" style="height: 20px; width: 40%" />
-          <div class="skel" style="height: 60px" />
-          <div class="skel" style="height: 44px" />
-          <div class="skel" style="height: 16px; width: 55%" />
+          <Skeleton height="20px" width="40%" />
+          <Skeleton height="60px" />
+          <Skeleton height="44px" />
+          <Skeleton height="16px" width="55%" />
         </div>
         <div class="right">
           <div class="field">
-            <div class="skel" style="height: 20px; width: 40%" />
-            <div class="skel" style="height: 60px" />
+            <Skeleton height="20px" width="40%" />
+            <Skeleton height="60px" />
           </div>
-          <div class="skel" style="height: 48px" />
-          <div class="skel" style="height: 84px" />
+          <Skeleton height="48px" />
+          <Skeleton height="84px" />
         </div>
       </div>
 
@@ -114,6 +114,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import Modal from '../ui/Modal.vue'
 import ErrorNote from '../ui/ErrorNote.vue'
+import Skeleton from '../ui/Skeleton.vue'
 import { useAppStore } from '../../stores/app'
 import { useLogSheetStore } from '../../stores/logSheet'
 import { useLogWeeksStore } from '../../stores/logWeeks'
@@ -402,12 +403,6 @@ function close() { sheet.close() }
 .day[aria-pressed='true'] { background: #0369a1; border-color: #0369a1; color: #fff; }
 button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid #0284c7; outline-offset: 2px; }
 .cols { display: flex; flex-direction: column; gap: 12px; }
-.skel { border-radius: 8px; background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 37%, #f3f4f6 63%); background-size: 400% 100%; animation: appear 0.15s 0.12s both, shimmer 1.4s ease infinite; }
-/* Most loads take a few milliseconds: only show the placeholders when one is slower than that. */
-@keyframes appear { from { opacity: 0; } }
-.dk-skel { display: block; width: 28px; height: 12px; margin-top: 3px; }
-@keyframes shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
-@media (prefers-reduced-motion: reduce) { .skel { animation: none; } }
 .right { display: flex; flex-direction: column; gap: 12px; }
 .field { display: flex; flex-direction: column; gap: 8px; }
 .field-head { display: flex; align-items: center; justify-content: space-between; }

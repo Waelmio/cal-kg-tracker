@@ -20,6 +20,7 @@
       <template v-for="w in rows" :key="w.monday">
         <div class="cell wk" :style="w.style" :title="w.title">
           <span class="top">{{ w.top }}</span>
+          <Skeleton v-if="!data" width="60%" height="16px" style="margin-top: 4px" />
           <span class="mid">{{ w.avg }}</span>
           <span class="sub">{{ w.weightText }}</span>
         </div>
@@ -28,6 +29,7 @@
           :style="d.style" :title="d.title" :aria-label="d.label" @click="sheet.open(d.date)"
         >
           <span class="top" :style="{ fontSize: d.inMonth ? '14px' : '12px' }">{{ d.top }}</span>
+          <Skeleton v-if="!data" width="50%" height="12px" style="margin-top: 4px" />
           <span class="mid">{{ d.mid }}</span>
           <span class="sub">{{ d.sub }}</span>
         </button>
@@ -48,6 +50,7 @@
 <script setup lang="ts">
 import { computed, ref, shallowRef, watch } from 'vue'
 import ErrorNote from '../ui/ErrorNote.vue'
+import Skeleton from '../ui/Skeleton.vue'
 import InfoTip from '../ui/InfoTip.vue'
 import { useAppStore } from '../../stores/app'
 import { useLogSheetStore } from '../../stores/logSheet'
