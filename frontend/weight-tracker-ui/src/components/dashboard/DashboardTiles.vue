@@ -94,7 +94,7 @@
         <div class="big" :style="{ color: o.kcal >= 0 ? UNDER : OVER }">{{ kcal(Math.abs(o.kcal)) }} <span class="unit">{{ o.kcal >= 0 ? 'kcal below TDEE' : 'kcal above TDEE' }}</span></div>
       </template>
       <template #sub>
-        <p class="tile-sub">{{ o.loggedDays === 0 ? `No logged days ${o.sinceGoalStart ? 'since the goal started' : 'in the last four full weeks'}` : o.sinceGoalStart ? `${o.loggedDays} / ${o.totalDays} days logged since the ${fullDate(o.since)}` : `${o.loggedDays} / ${o.totalDays} days logged in the last four full weeks` }}</p>
+        <p class="tile-sub">{{ o.loggedDays === 0 ? `No logged days ${o.sinceGoalStart ? 'since the goal started' : 'in the last four full weeks'}` : o.sinceGoalStart ? `${o.loggedDays} / ${o.totalDays} days logged since ${shortDate(o.since, true)}` : `${o.loggedDays} / ${o.totalDays} days logged in the last four full weeks` }}</p>
       </template>
       <template v-if="o.loggedDays > 0">
         <TileRow>
@@ -115,7 +115,7 @@ import { computed } from 'vue'
 import Tile from '../ui/Tile.vue'
 import TileRow from '../ui/TileRow.vue'
 import InfoTip from '../ui/InfoTip.vue'
-import { fullDate, kcal, shortDate, signed, weight, weightChange } from '../../utils/format'
+import { kcal, shortDate, signed, weight, weightChange } from '../../utils/format'
 import type { DashboardStats, WeightUnit } from '../../types'
 
 const props = defineProps<{ stats: DashboardStats; unit: WeightUnit }>()
@@ -151,12 +151,12 @@ const paceColor = computed(() => {
 <style scoped>
 /* Tiles are subgrids spanning five rows each, so row N lines up across a whole row of tiles. */
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); column-gap: 16px; row-gap: 0; margin-bottom: -16px; }
-.big { font-size: 30px; font-weight: 700; line-height: 1.1; }
+.big { font-size: 28px; font-weight: 700; line-height: 1.1; }
 .unit { font-size: 14px; font-weight: 400; color: #4b5563; margin-left: 6px; }
-.tile-sub { margin: 0; color: #4b5563; }
+.tile-sub { margin: 0; color: #4b5563; font-size: 14px; line-height: 1.3; }
 .muted { color: #4b5563; }
-.bar { height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; margin: 6px 0; }
+.bar { height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; margin: 4px 0 6px; }
 .bar > div { height: 8px; }
-.srow { display: grid; grid-template-columns: minmax(0, 1fr) 56px 64px; gap: 8px; align-items: baseline; font-size: 14px; min-height: 20px; }
+.srow { display: grid; grid-template-columns: minmax(0, 1fr) 56px 64px; gap: 8px; align-items: baseline; font-size: 14px; line-height: 1.3; min-height: 20px; }
 .r { text-align: right; }
 </style>

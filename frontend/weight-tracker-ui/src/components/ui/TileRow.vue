@@ -10,7 +10,7 @@ defineProps<{ label?: string; value?: string | number | null; color?: string }>(
 </script>
 
 <style scoped>
-.row { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; font-size: 14px; min-height: 20px; }
+.row { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; font-size: 14px; line-height: 1.3; min-height: 20px; }
 .label { color: #4b5563; white-space: nowrap; }
 .val { font-weight: 600; text-align: right; white-space: nowrap; }
 </style>
