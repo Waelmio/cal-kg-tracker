@@ -1,7 +1,9 @@
 namespace WeightTracker.Api.Models;
 
+[System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
 public enum GoalKind { Reach, Maintain }
 
+[System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
 public enum GoalEndReason { Ended, Reached, Replaced, Maintain }
 
 public class Goal

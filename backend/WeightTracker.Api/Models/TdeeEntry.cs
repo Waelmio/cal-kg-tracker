@@ -1,5 +1,6 @@
 namespace WeightTracker.Api.Models;
 
+[System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
 public enum TdeeSource { Manual, Estimate }
 
 /// <summary>One TDEE value in force from <see cref="EffectiveFrom"/> until the next entry.</summary>

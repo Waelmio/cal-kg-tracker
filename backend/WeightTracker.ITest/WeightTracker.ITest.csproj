@@ -28,4 +28,8 @@
     <ProjectReference Include="..\WeightTracker.Api\WeightTracker.Api.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="Fixtures\fixture.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
