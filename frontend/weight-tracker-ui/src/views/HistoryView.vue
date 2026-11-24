@@ -74,7 +74,7 @@ import { useLogSheetStore } from '../stores/logSheet'
 import { useAsyncData } from '../composables/useAsyncData'
 import * as statsApi from '../api/stats'
 import { addDays, daysBetween, lastDayOfMonth, mondayOf, monthOf } from '../utils/dates'
-import { CALENDAR_COLORS, kcal, longDate, shortDate, STATUS_COLORS, weekdayShort, weight, weightChange } from '../utils/format'
+import { CALENDAR_COLORS, kcal, longDate, PENDING_COLORS, shortDate, STATUS_COLORS, weekdayShort, weight, weightChange } from '../utils/format'
 import type { CalendarDay, Status } from '../types'
 import { toUnit } from '../utils/units'
 import { niceTicks } from '../utils/chart'
@@ -122,7 +122,10 @@ const dayName = (d: string) => `${weekdayShort(d)} ${shortDate(d)}`
 const hasData = (d: CalendarDay) => d.calories != null || d.weightKg != null || d.isCheatDay || !!d.notes
 const remark = (d: CalendarDay) => [d.isCheatDay ? 'cheat day' : '', d.notes ?? ''].filter(Boolean).join(', ')
 function chipStyle(d: CalendarDay) {
-  if (!d.status) return { background: '#f3f4f6', color: '#4b5563' }
+  if (!d.status) {
+    const [bg, fg] = d.date === app.today ? PENDING_COLORS.today : PENDING_COLORS.ahead
+    return { background: bg, color: fg }
+  }
   const [bg, fg] = CALENDAR_COLORS[d.inGoal ? 'day' : 'dayOut'][d.status]
   return { background: bg, color: fg }
 }

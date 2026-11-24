@@ -119,7 +119,7 @@ import { useLogSheetStore } from '../../stores/logSheet'
 import { useLogWeeksStore } from '../../stores/logWeeks'
 import * as logApi from '../../api/dailyLog'
 import { addDays, mondayOf } from '../../utils/dates'
-import { CALENDAR_COLORS, relativeDay, shortDate, weekdayShort } from '../../utils/format'
+import { CALENDAR_COLORS, PENDING_COLORS, relativeDay, shortDate, weekdayShort } from '../../utils/format'
 import { displayWeight, toKg } from '../../utils/units'
 import type { LogDay, LogWeek } from '../../types'
 
@@ -251,12 +251,15 @@ const weekDays = computed(() => {
     const stored = days.find((x) => x.date === d)
     const logged = selected ? kcalValue.value : stored?.calories ?? null
     const plan = restOfWeek.value != null && d > date.value ? restOfWeek.value : selected ? budget.value : stored?.planned ?? null
-    const colors = !selected && stored?.status ? CALENDAR_COLORS.day[stored.status] : null
+    const colors = selected || logged == null ? null
+      : stored?.status ? CALENDAR_COLORS.day[stored.status]
+      : d === app.today ? PENDING_COLORS.today
+      : d > app.today ? PENDING_COLORS.ahead : null
     return {
       date: d, name: `${weekdayShort(d)} ${Number(d.slice(8))}`,
       kcal: String(logged ?? plan ?? '–'),
       planned: !selected && logged == null && plan != null,
-      style: colors ? { background: colors[0], color: colors[1], borderColor: 'transparent' } : undefined,
+      style: colors ? { background: colors[0], color: colors[1], borderColor: colors[2] ?? 'transparent' } : undefined,
     }
   })
 })
@@ -396,7 +399,7 @@ function close() { sheet.close() }
 .day { min-height: 62px; border-radius: 8px; border: 1px solid #e5e7eb; background: #fff; color: #1f2937; font: inherit; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .day .dn { font-weight: 600; }
 .day .dk { font-size: 13px; }
-.day.plan { border: 1px dashed #6b7280; color: #4b5563; }
+.day.plan { border: 1px dashed #9ca3af; color: #6b7280; }
 .day[aria-pressed='true'] { background: #0369a1; border-color: #0369a1; color: #fff; }
 button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid #0284c7; outline-offset: 2px; }
 .cols { display: flex; flex-direction: column; gap: 12px; }

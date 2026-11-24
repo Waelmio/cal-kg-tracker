@@ -88,3 +88,10 @@ export const CALENDAR_COLORS = {
   week: { under: ['#00bc7d', '#ffffff'], balanced: ['#ffb900', '#ffffff'], over: ['#ff2056', '#ffffff'] },
   weekOut: { under: ['#a4f4cf', '#006045'], balanced: ['#fee685', '#973c00'], over: ['#ffccd3', '#a50036'] },
 } as const satisfies Record<string, Record<Status, readonly [string, string]>>
+
+/** Days without a status yet: [background, text, border]. A fill always means "logged", a dashed border "planned". */
+export const PENDING_COLORS = {
+  today: ['#e0f2fe', '#075985', '#0369a1'],       // logged today, still in progress
+  ahead: ['#e2e8f0', '#1e293b', '#64748b'],       // a future day that is already logged
+  planned: ['#ffffff', '#6b7280', '#9ca3af'],
+} as const

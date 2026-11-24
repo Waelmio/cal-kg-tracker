@@ -39,6 +39,7 @@
       <li><i :style="{ background: STATUS_COLORS.balanced.solid }" /><InfoTip :label="`Over, ${app.settings.averagingWeeks}-week average ok`" text="Over target, but fine averaged with the weeks around it." /></li>
       <li><i :style="{ background: STATUS_COLORS.over.solid }" />Over target</li>
       <li><i class="dash" /><InfoTip label="Planned" text="Your budget. Doesn't count until you log it." /></li>
+      <li><i class="ahead" /><InfoTip label="Logged ahead" text="A future day you already logged. Counts once the day has passed." /></li>
       <li><i class="light" /><InfoTip label="Lighter: outside the goal" text="Outside your current goal." /></li>
     </ul>
   </section>
@@ -53,7 +54,7 @@ import { useLogSheetStore } from '../../stores/logSheet'
 import { useAsyncData } from '../../composables/useAsyncData'
 import * as statsApi from '../../api/stats'
 import { addDays, addMonths, isoWeek, mondayOf, monthOf } from '../../utils/dates'
-import { CALENDAR_COLORS, kcal, longDate, monthTitle, STATUS_COLORS, statusText, weight, weightChange } from '../../utils/format'
+import { CALENDAR_COLORS, kcal, longDate, monthTitle, PENDING_COLORS, STATUS_COLORS, statusText, weight, weightChange } from '../../utils/format'
 import type { CalendarDay, CalendarWeek } from '../../types'
 
 defineEmits<{ 'month-summary': [month: string] }>()
@@ -86,8 +87,20 @@ function dayStyle(date: string, d: CalendarDay | undefined) {
     const [bg, fg] = CALENDAR_COLORS[d.inGoal ? 'day' : 'dayOut'][d.status]
     return { background: bg, color: fg, border: '1px solid transparent' }
   }
-  if (date === app.today) return { ...base, color: '#1f2937', border: '2px solid #0369a1' }
-  if (d.planned != null) return { ...base, border: d.plannedLogged ? '1px solid #6b7280' : '1px dashed #6b7280' }
+  if (date === app.today) {
+    const [bg, fg, line] = PENDING_COLORS.today
+    return d.calories != null
+      ? { background: bg, color: fg, border: `2px solid ${line}`, fontWeight: 600 }
+      : { background: '#ffffff', color: PENDING_COLORS.planned[1], border: `2px dashed ${line}` }
+  }
+  if (d.calories != null && date > app.today) {
+    const [bg, fg, line] = PENDING_COLORS.ahead
+    return { background: bg, color: fg, border: `1px solid ${line}`, fontWeight: 600 }
+  }
+  if (d.planned != null) {
+    const [bg, fg, line] = PENDING_COLORS.planned
+    return { background: bg, color: fg, border: `1px dashed ${line}` }
+  }
   return base
 }
 
@@ -122,7 +135,7 @@ const rows = computed(() => {
         title: [d?.target != null ? `Target ${d.target} kcal` : '', d?.planned != null && !logged ? 'Planned from your budget' : '', d?.notes ?? ''].filter(Boolean).join('\n'),
         label: [
           longDate(date),
-          logged ? `${d!.calories} kcal, ${statusText(d!.status ?? null).toLowerCase()}` : d?.planned != null ? `planned ${d.planned} kcal` : 'not logged',
+          logged ? `${d!.calories} kcal${isToday ? ', logged, in progress' : date > app.today ? ', logged ahead' : d!.status ? ', ' + statusText(d!.status).toLowerCase() : ''}` : d?.planned != null ? `planned ${d.planned} kcal` : 'not logged',
           d?.weightKg != null ? weight(d.weightKg, app.unit, true) : '',
           d?.isCheatDay ? 'cheat day' : '',
           d?.notes ? `note: ${d.notes}` : '',
@@ -157,10 +170,10 @@ h2 { margin: 0; min-width: 150px; font-size: 16px; font-weight: 600; text-align:
 button:focus-visible { outline: 2px solid #0284c7; outline-offset: 2px; }
 .grid { display: grid; grid-template-columns: minmax(80px, 1.5fr) repeat(7, minmax(0, 1fr)); gap: 4px; }
 .h { text-align: center; font-size: 12px; font-weight: 600; color: #4b5563; }
-.cell { min-height: 68px; min-width: 0; box-sizing: border-box; border-radius: 8px; padding: 4px 2px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; font: inherit; }
+.cell { min-height: 68px; min-width: 0; box-sizing: border-box; border-radius: 8px; padding: 4px 2px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; font: inherit; font-weight: 400; }
 .day:hover { filter: brightness(0.97); }
 .top { font-size: 12px; font-weight: 600; }
-.mid { font-size: 12px; font-weight: 400; }
+.mid { font-size: 12px; }
 .sub { font-size: 12px; }
 .wk .mid { font-size: 17px; font-weight: 700; }
 .wk .sub { font-weight: 600; }
@@ -168,6 +181,7 @@ button:focus-visible { outline: 2px solid #0284c7; outline-offset: 2px; }
 .legend li { display: inline-flex; align-items: center; gap: 6px; }
 .legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
 .legend i.dash { background: #fff; border: 1px dashed #6b7280; }
+.legend i.ahead { background: #e2e8f0; border: 1px solid #64748b; }
 .legend i.light { width: 16px; background: linear-gradient(90deg, #a4f4cf 50%, #ffccd3 50%); }
 /* Narrow screens: the same layout, a little tighter. */
 @media (max-width: 639px) {
