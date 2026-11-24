@@ -57,7 +57,6 @@ onBeforeUnmount(() => {
 .info { position: relative; display: inline-block; }
 .label {
   all: unset; cursor: help; color: inherit;
-  text-decoration: underline dotted #9ca3af; text-underline-offset: 3px;
   min-height: 24px; display: inline-flex; align-items: center;
 }
 .label:focus-visible { outline: 2px solid #0284c7; outline-offset: 2px; border-radius: 2px; }
