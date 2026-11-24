@@ -190,18 +190,22 @@ public class StatsService(AppDbContext db) : IStatsService
         var (c, _, _) = await LoadAsync(today);
         var budget = c.Budget();
 
-        var days = Range(from, to).Select(d =>
+        CalendarDayDto Day(DateOnly d)
         {
             c.Data.Days.TryGetValue(d, out var day);
             return new CalendarDayDto(
                 Fmt(d), day?.Calories, c.Target(d), Status(c.DayStatus(d)), Planned(budget, d),
                 d > today && day?.Calories is not null, c.InGoal(d), day?.WeightKg, day?.IsCheatDay ?? false, day?.Notes);
-        }).ToList();
+        }
 
         var weeks = new List<CalendarWeekDto>();
         for (var m = MondayOf(from); m <= to; m = m.AddDays(7)) weeks.Add(WeekDto(c, m));
 
-        return new CalendarDto(Fmt(today), days, weeks);
+        var months = new List<CalendarMonthDto>();
+        for (var m = new DateOnly(from.Year, from.Month, 1); m <= to; m = m.AddMonths(1))
+            months.Add(new CalendarMonthDto(m.ToString("yyyy-MM", CultureInfo.InvariantCulture), MonthDto(c, m)));
+
+        return new CalendarDto(Fmt(today), Day(today), Range(from, to).Select(Day).ToList(), weeks, months);
     }
 
     private static int? Planned(BudgetResult? budget, DateOnly d) =>

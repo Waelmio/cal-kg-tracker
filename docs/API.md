@@ -20,7 +20,7 @@ Every statistic is computed server-side. Everything that depends on the date req
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/api/stats/dashboard?today=` | Tiles, budget, streak, deficits, weight, goal status, weight series |
-| GET | `/api/stats/calendar?from&to&today=` | Days (calories, target, status, planned, inGoal, notes) and weeks. Up to ten years |
+| GET | `/api/stats/calendar?from&to&today=` | Days (calories, target, status, planned, inGoal, notes), weeks and whole months, plus today. Up to ten years |
 | GET | `/api/stats/log-week?date&today=` | The week around a date, with everything the log sheet shows and edits |
 | GET | `/api/stats/budget-by-window?today=` | Today's budget for each averaging window (Settings preview) |
 | GET | `/api/stats/periods?unit=week\|month&count&today=` | Average calories chart |

@@ -115,7 +115,12 @@ public record LogWeekDto(string Monday, List<LogDayDto> Days, WeekPoolDto? ThisW
 
 public record CalendarWeekDto(string Monday, int IsoWeek, int IsoYear, PeriodDto Figures);
 
-public record CalendarDto(string Today, List<CalendarDayDto> Days, List<CalendarWeekDto> Weeks);
+public record CalendarMonthDto(string Month, PeriodDto Figures);
+
+/// <param name="TodayDay">Today, also when it is outside the range.</param>
+/// <param name="Months">Every month the range touches, with the figures of the whole month.</param>
+public record CalendarDto(
+    string Today, CalendarDayDto TodayDay, List<CalendarDayDto> Days, List<CalendarWeekDto> Weeks, List<CalendarMonthDto> Months);
 
 public record MonthSummaryDto(
     string Month,

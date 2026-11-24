@@ -219,8 +219,11 @@ export interface CalendarWeek {
 
 export interface Calendar {
   today: string
+  /** Today, also when it is outside the range. */
+  todayDay: CalendarDay
   days: CalendarDay[]
   weeks: CalendarWeek[]
+  months: { month: string; figures: Period }[]
 }
 
 export interface TdeeEstimate {

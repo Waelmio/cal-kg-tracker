@@ -3,18 +3,18 @@
     <header class="head">
       <div class="title-row">
         <button type="button" class="nav" aria-label="Previous month" @click="move(-1)">‹</button>
-        <h2 id="cal-title">{{ monthTitle(month) }}</h2>
+        <h2 id="cal-title" :style="{ color: titleColor }">{{ monthTitle(month) }}</h2>
         <button type="button" class="nav" aria-label="Next month" @click="move(1)">›</button>
       </div>
       <div class="actions">
-        <button type="button" :class="{ away: month !== monthOf(app.today) }" @click="month = monthOf(app.today)">Today</button>
-        <button type="button" @click="$emit('month-summary', month)">Month summary</button>
+        <button type="button" :class="{ away: month !== monthOf(app.today) }" :style="todayStyle" :title="todayTitle" @click="month = monthOf(app.today)">Today</button>
+        <button type="button" :style="monthStyle" :title="monthTip" @click="$emit('month-summary', month)">Month summary</button>
       </div>
     </header>
 
-    <ErrorNote v-if="error" :message="error" :retry="reload" />
+    <ErrorNote v-if="error && !data" :message="error" :retry="() => store.show(month)" />
 
-    <div class="grid" :aria-busy="loading">
+    <div class="grid" :aria-busy="!data">
       <div v-for="h in ['Week avg', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']" :key="h" class="h">{{ h }}</div>
 
       <template v-for="w in rows" :key="w.monday">
@@ -46,16 +46,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 import ErrorNote from '../ui/ErrorNote.vue'
 import InfoTip from '../ui/InfoTip.vue'
 import { useAppStore } from '../../stores/app'
 import { useLogSheetStore } from '../../stores/logSheet'
-import { useAsyncData } from '../../composables/useAsyncData'
-import * as statsApi from '../../api/stats'
-import { addDays, addMonths, isoWeek, mondayOf, monthOf } from '../../utils/dates'
+import { calendarStart, useCalendarMonthsStore } from '../../stores/calendarMonths'
+import { addDays, addMonths, isoWeek, monthOf } from '../../utils/dates'
 import { CALENDAR_COLORS, kcal, longDate, monthTitle, PENDING_COLORS, STATUS_COLORS, statusText, weight, weightChange } from '../../utils/format'
-import type { CalendarDay, CalendarWeek } from '../../types'
+import type { Calendar, CalendarDay, CalendarWeek } from '../../types'
 
 defineEmits<{ 'month-summary': [month: string] }>()
 
@@ -64,12 +63,17 @@ const sheet = useLogSheetStore()
 const month = ref(monthOf(app.today))
 
 const range = computed(() => {
-  const from = mondayOf(`${month.value}-01`)
-  // Always six weeks, so the page doesn't jump from month to month and the planned weeks stay in view.
+  const from = calendarStart(month.value)
   return { from, to: addDays(from, 41) }
 })
 
-const { data, loading, error, reload } = useAsyncData(() => statsApi.getCalendar(range.value.from, range.value.to), [month])
+const store = useCalendarMonthsStore()
+const error = computed(() => store.error)
+// After a change the month is loaded again: the page keeps showing what it has until then.
+const last = shallowRef<{ month: string; calendar: Calendar } | null>(null)
+const data = computed(() => store.get(month.value) ?? (last.value?.month === month.value ? last.value.calendar : null))
+watch([month, () => app.version], () => store.show(month.value), { immediate: true })
+watch(() => store.get(month.value), (calendar) => { if (calendar) last.value = { month: month.value, calendar } }, { immediate: true })
 
 function move(by: number) { month.value = addMonths(month.value, by) }
 watch(() => app.today, (t, old) => { if (month.value === monthOf(old)) month.value = monthOf(t) })
@@ -111,6 +115,24 @@ function weekStyle(w: CalendarWeek | undefined) {
   const [bg, fg] = CALENDAR_COLORS[w!.figures.inGoal ? 'week' : 'weekOut'][status]
   return { background: bg, color: fg, border: '1px solid transparent' }
 }
+
+// The buttons and the title carry the color of what they stand for: today like its day cell, the month like a
+// week's average (months are only green or red).
+const today = computed(() => data.value?.todayDay ?? last.value?.calendar.todayDay)
+const todayStyle = computed(() => dayStyle(app.today, today.value))
+const todayTitle = computed(() => {
+  const d = today.value
+  return d?.calories != null ? `${d.calories} kcal${d.status ? ', ' + statusText(d.status).toLowerCase() : ''}` : 'Not logged yet'
+})
+const figures = computed(() => data.value?.months.find((m) => m.month === month.value)?.figures)
+const monthStyle = computed(() => {
+  const f = figures.value
+  if (!f?.status) return undefined
+  const [bg, fg] = CALENDAR_COLORS[f.inGoal ? 'week' : 'weekOut'][f.status]
+  return { background: bg, color: fg, borderColor: 'transparent' }
+})
+const titleColor = computed(() => (figures.value?.status ? STATUS_COLORS[figures.value.status].text : undefined))
+const monthTip = computed(() => (figures.value?.avgCalories != null ? `Average ${figures.value.avgCalories} kcal${figures.value.avgTarget != null ? `, target ${figures.value.avgTarget}` : ''}` : 'Nothing logged'))
 
 const rows = computed(() => {
   const out = []
@@ -165,8 +187,9 @@ h2 { margin: 0; min-width: 150px; font-size: 16px; font-weight: 600; text-align:
 .nav:hover { background: #f3f4f6; }
 .actions { display: flex; align-items: center; gap: 8px; }
 .actions button { min-height: 44px; padding: 0 16px; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; font: inherit; font-weight: 600; color: #1f2937; }
-.actions button.away { background: #0284c7; border-color: #0284c7; color: #fff; }
-.actions button:disabled { opacity: 1; }
+.actions button:hover { filter: brightness(0.97); }
+/* On another month: today's button is the way back. */
+.actions button.away { box-shadow: 0 0 0 3px #bae6fd; }
 button:focus-visible { outline: 2px solid #0284c7; outline-offset: 2px; }
 .grid { display: grid; grid-template-columns: minmax(80px, 1.5fr) repeat(7, minmax(0, 1fr)); gap: 4px; }
 .h { text-align: center; font-size: 12px; font-weight: 600; color: #4b5563; }

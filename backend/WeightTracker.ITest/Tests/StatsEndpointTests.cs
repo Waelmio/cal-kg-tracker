@@ -230,6 +230,18 @@ public abstract class StatsEndpointTestsBase
     }
 
     [Fact]
+    public async Task Calendar_HasTodayAndTheMonths_WhateverTheRange()
+    {
+        var client = await LoadFixtureAsync(todayLogged: true);
+        var c = await Get(client, $"/api/stats/calendar?from=2026-09-28&to=2026-11-01&today={Today}");
+        Assert.Equal((Today, "under"), (c.GetProperty("todayDay").GetProperty("date").GetString(), c.GetProperty("todayDay").GetProperty("status").GetString()));
+        var months = c.GetProperty("months").EnumerateArray().ToList();
+        Assert.Equal(new[] { "2026-09", "2026-10", "2026-11" }, months.Select(m => m.GetProperty("month").GetString()));
+        Assert.Equal(1978, months[1].GetProperty("figures").GetProperty("avgCalories").GetInt32());   // the whole month
+        Assert.Equal("over", months[1].GetProperty("figures").GetProperty("status").GetString());
+    }
+
+    [Fact]
     public async Task Calendar_PlansTheFollowingWeeks_AsFarAsTheWindowReaches()
     {
         var two = await Get(await LoadFixtureAsync(2), $"/api/stats/calendar?from=2026-11-30&to=2026-12-13&today={Today}");
