@@ -3,7 +3,7 @@
     <header class="head">
       <div class="title-row">
         <button type="button" class="nav" aria-label="Previous month" @click="move(-1)">‹</button>
-        <h2 id="cal-title" :style="{ color: titleColor }">{{ monthTitle(month) }}</h2>
+        <h2 id="cal-title"><button type="button" class="month" :style="{ color: titleColor }" :title="`${monthTip}. Open the month summary`" @click="$emit('month-summary', month)">{{ monthTitle(month) }}</button></h2>
         <button type="button" class="nav" aria-label="Next month" @click="move(1)">›</button>
       </div>
       <div class="actions">
@@ -183,6 +183,8 @@ const rows = computed(() => {
 .head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
 .title-row { display: flex; align-items: center; gap: 8px; }
 h2 { margin: 0; min-width: 150px; font-size: 16px; font-weight: 600; text-align: center; white-space: nowrap; }
+.month { width: 100%; min-height: 44px; border: 0; border-radius: 8px; padding: 0 8px; background: none; font: inherit; color: #1f2937; }
+.month:hover { background: #f3f4f6; }
 .nav { width: 44px; height: 44px; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; font-size: 18px; color: #374151; }
 .nav:hover { background: #f3f4f6; }
 .actions { display: flex; align-items: center; gap: 8px; }

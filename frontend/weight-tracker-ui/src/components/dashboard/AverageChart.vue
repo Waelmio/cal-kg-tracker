@@ -19,15 +19,16 @@
     <p v-else-if="!loading && bars.length === 0" class="empty">Nothing logged yet.</p>
 
     <div v-else class="scroll">
-      <div class="bars" :style="{ minWidth: bars.length * 54 + 'px', gridTemplateColumns: `repeat(${bars.length}, minmax(0, 1fr))` }" role="list">
-        <div v-for="b in bars" :key="b.from" class="col" role="listitem" :title="b.tip" :aria-label="b.tip">
+      <div class="bars" :style="{ minWidth: bars.length * 54 + 'px', gridTemplateColumns: `repeat(${bars.length}, minmax(0, 1fr))` }">
+        <!-- A month opens its summary; weeks have none. -->
+        <component :is="b.month ? 'button' : 'div'" v-for="b in bars" :key="b.from" :type="b.month ? 'button' : undefined" class="col" :class="{ open: b.month }" :title="b.tip" :aria-label="b.tip" @click="b.month && $emit('month-summary', b.month)">
           <div class="half up"><span class="lbl">{{ b.upLabel }}</span><div class="bar top" :style="{ height: b.up + 'px', background: b.color }" /></div>
           <div class="half down"><div class="bar bottom" :style="{ height: b.down + 'px', background: b.color }" /><span class="lbl">{{ b.downLabel }}</span></div>
           <div class="avg">{{ b.avg }}</div>
           <div class="name">{{ b.name }}</div>
           <div class="wt">{{ b.weight }}</div>
           <div class="wt">{{ b.change }}</div>
-        </div>
+        </component>
       </div>
     </div>
     <p class="note">Bars show the gap to the target. Planned days are left out.</p>
@@ -43,6 +44,8 @@ import { useAsyncData } from '../../composables/useAsyncData'
 import * as statsApi from '../../api/stats'
 import { isoWeek } from '../../utils/dates'
 import { kcal, monthTitle, STATUS_COLORS, weight, weightChange } from '../../utils/format'
+
+defineEmits<{ 'month-summary': [month: string] }>()
 
 const app = useAppStore()
 const modes = [{ value: 'week', label: 'Weekly' }, { value: 'month', label: 'Monthly' }] as const
@@ -69,13 +72,13 @@ const bars = computed(() =>
       const sofar = p.to >= app.today && p.from <= app.today
       const name = (mode.value === 'week' ? `W${isoWeek(p.from)}` : monthTitle(p.from.slice(0, 7)).slice(0, 3)) + (sofar ? ' so far' : '')
       return {
-        from: p.from, color: p.inGoal ? c.solid : c.light,
+        from: p.from, month: mode.value === 'month' ? p.from.slice(0, 7) : null, color: p.inGoal ? c.solid : c.light,
         up: over ? h : 0, down: over ? 0 : h,
         upLabel: over ? `+${gap}` : '', downLabel: over || gap == null ? '' : gap === 0 ? '0' : `−${Math.abs(gap)}`,
         avg: kcal(p.avgCalories), name,
         weight: p.avgWeightKg == null ? '' : `${weight(p.avgWeightKg, app.unit, true)}`,
         change: p.weightChangeKg == null ? '' : weightChange(p.weightChangeKg, app.unit),
-        tip: `${name}: average ${p.avgCalories}, ${p.avgTarget == null ? 'no target' : `target ${p.avgTarget}`}`,
+        tip: `${name}: average ${p.avgCalories}, ${p.avgTarget == null ? 'no target' : `target ${p.avgTarget}`}${mode.value === 'month' ? '. Open the month summary' : ''}`,
       }
     }),
 )
@@ -96,6 +99,9 @@ h2 { margin: 0; font-size: 16px; font-weight: 600; }
 .scroll { overflow-x: auto; }
 .bars { display: grid; }
 .col { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.col.open { border: 0; border-radius: 8px; padding: 0 0 6px; background: none; font: inherit; color: inherit; }
+.col.open:hover { background: #f3f4f6; }
+.col.open:focus-visible { outline: 2px solid #0284c7; outline-offset: -2px; }
 .half { width: 100%; height: 96px; display: flex; flex-direction: column; align-items: center; }
 .half.up { justify-content: flex-end; border-bottom: 1px solid #6b7280; }
 .bar { width: 24px; }

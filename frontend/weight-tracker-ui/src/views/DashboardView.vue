@@ -11,7 +11,7 @@
     </div>
 
     <CalendarMonth @month-summary="summaryMonth = $event" />
-    <AverageChart />
+    <AverageChart @month-summary="summaryMonth = $event" />
     <GoalCard v-if="data" :goal="data.goal" :unit="app.unit" :today="app.today" :series="data.weightSeries" />
 
     <MonthSummaryModal v-if="summaryMonth" :month="summaryMonth" @close="summaryMonth = null" @change="summaryMonth = $event" />
