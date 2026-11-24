@@ -41,3 +41,14 @@
 @utility label {
   @apply block text-sm font-medium text-gray-700 mb-1;
 }
+
+/*
+  Tailwind's reset makes buttons use the default arrow. Everything clickable gets a hand, disabled
+  things get "not allowed". :where() keeps the specificity at zero so a component can still override it.
+*/
+:where(button, [role='button'], select, summary, input[type='checkbox'], input[type='radio'], input[type='file'], input[type='month'], input[type='date']) {
+  cursor: pointer;
+}
+:where(button:disabled, select:disabled, input:disabled) {
+  cursor: not-allowed;
+}
