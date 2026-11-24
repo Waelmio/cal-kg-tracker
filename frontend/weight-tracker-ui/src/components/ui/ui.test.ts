@@ -25,6 +25,12 @@ describe('Tile', () => {
     expect(w.findAll('.skeleton').length).toBeGreaterThan(0)
   })
 
+  it('never shares an id with another tile', () => {
+    const w = mount({ components: { Tile }, template: '<div><Tile title="a" /><Tile title="b" /></div>' })
+    const ids = w.findAll('h2').map((h) => h.attributes('id'))
+    expect(new Set(ids).size).toBe(2)
+  })
+
   it('is labelled by its title for screen readers', () => {
     const w = mount(Tile, { props: { title: 'Today' } })
     expect(w.get('section').attributes('aria-labelledby')).toBe(w.get('h2').attributes('id'))
@@ -67,6 +73,21 @@ describe('InfoTip', () => {
     expect(w.find('[role=tooltip]').exists()).toBe(true)
     document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }))
     await nextTick()
+    expect(w.find('[role=tooltip]').exists()).toBe(false)
+    w.unmount()
+  })
+
+  it('a tap opens it (focus comes first) and a second tap closes it', async () => {
+    const w = mount(InfoTip, { props: { label: 'Budget', text: 'x' }, attachTo: document.body })
+    const tap = async () => {
+      await w.get('button').trigger('pointerdown')
+      if (document.activeElement !== w.get('button').element) await w.get('button').trigger('focus')
+      await w.get('button').trigger('click')
+    }
+    await tap()
+    expect(w.find('[role=tooltip]').exists()).toBe(true)
+    ;(w.get('button').element as HTMLElement).focus()
+    await tap()
     expect(w.find('[role=tooltip]').exists()).toBe(false)
     w.unmount()
   })

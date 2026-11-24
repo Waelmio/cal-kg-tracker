@@ -16,13 +16,12 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, useId } from 'vue'
 
-let counter = 0
-const props = withDefaults(defineProps<{ title: string; sheet?: boolean; maxWidth?: string }>(), { sheet: false, maxWidth: '520px' })
+withDefaults(defineProps<{ title: string; sheet?: boolean; maxWidth?: string }>(), { sheet: false, maxWidth: '520px' })
 const emit = defineEmits<{ close: [] }>()
 
-const titleId = `modal-title-${++counter}`
+const titleId = useId()
 const dialog = ref<HTMLElement | null>(null)
 let previouslyFocused: Element | null = null
 
@@ -35,7 +34,8 @@ function onKey(e: KeyboardEvent) {
     return
   }
   if (e.key !== 'Tab' || !dialog.value) return
-  const items = Array.from(dialog.value.querySelectorAll<HTMLElement>(FOCUSABLE))
+  // Only what is on screen: some controls exist twice, one of them hidden for the phone or the desktop layout.
+  const items = Array.from(dialog.value.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((el) => el.getClientRects().length > 0)
   if (items.length === 0) return
   const first = items[0]
   const last = items[items.length - 1]
@@ -47,15 +47,13 @@ onMounted(async () => {
   previouslyFocused = document.activeElement
   document.body.style.overflow = 'hidden'
   await nextTick()
-  const first = dialog.value?.querySelector<HTMLElement>('[autofocus], input, textarea') ?? dialog.value
-  first?.focus()
+  // The content may focus a field itself once it has loaded; until then the keyboard is inside the dialog.
+  if (!dialog.value?.contains(document.activeElement)) dialog.value?.focus()
 })
 onBeforeUnmount(() => {
   document.body.style.overflow = ''
   if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus()
 })
-
-void props
 </script>
 
 <style scoped>
@@ -71,6 +69,7 @@ void props
 /* Below 640 px a sheet fills the screen. */
 @media (max-width: 639px) {
   .dialog.sheet { max-width: none; height: 100dvh; max-height: none; border-radius: 0; }
+  .dialog.sheet .body { flex: 1; }
   .head { padding: 16px 20px 4px; }
   .body { padding: 8px 20px 16px; }
   .foot { padding: 12px 20px 20px; }

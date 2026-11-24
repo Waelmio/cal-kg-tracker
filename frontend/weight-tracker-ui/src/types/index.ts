@@ -8,7 +8,6 @@ export interface DailyLog {
   weightKg: number | null
   caloriesKcal: number | null
   notes: string | null
-  calorieTarget: number | null
   isCheatDay: boolean
   createdAt: string
   updatedAt: string
@@ -26,7 +25,6 @@ export interface SaveDayRequest {
 export interface UserSettings {
   heightCm: number | null
   preferredUnit: WeightUnit
-  tdeeKcal: number | null
   averagingWeeks: number
 }
 
@@ -51,6 +49,8 @@ export interface Goal {
   kind: GoalKind
   endedOn: string | null
   endReason: GoalEndReason | null
+  /** Ended goals: the weight around the end date minus the starting weight. */
+  changeKg?: number
 }
 
 export interface CreateGoalRequest {
@@ -109,6 +109,8 @@ export interface Budget {
   avgTargetSoFar: number | null
   expectedAverage: number
   expectedDeficitKcal: number | null
+  /** False when even this plan leaves the averaging window over target. */
+  reachesTarget: boolean
   days: PlannedDay[]
   /** The next weeks, planned the same way (as far as the averaging window reaches). */
   futureDays: PlannedDay[]
@@ -125,6 +127,7 @@ export interface GoalStatus {
   kind: GoalKind
   state: 'none' | 'active' | 'reached' | 'datePassed'
   pace: 'ahead' | 'onTrack' | 'behind' | null
+  losing: boolean
   targetWeightKg: number
   startingWeightKg: number | null
   startDate: string
@@ -138,10 +141,16 @@ export interface GoalStatus {
   paceKgPerWeek: number | null
   projectedDate: string | null
   lateWeeks: number | null
+  reachedOn: string | null
+  remainingAtTargetDateKg: number | null
+  maintainBandKg: number
+  withinBand: boolean | null
 }
 
 export interface DashboardStats {
   today: string
+  /** The oldest day with anything logged. */
+  firstLog: string | null
   averagingWeeks: number
   calorieTarget: number | null
   tdee: number | null
@@ -173,7 +182,30 @@ export interface CalendarDay {
   inGoal: boolean
   weightKg: number | null
   isCheatDay: boolean
-  hasNote: boolean
+  notes: string | null
+}
+
+/** One day as the log sheet edits it. */
+export interface LogDay {
+  date: string
+  calories: number | null
+  weightKg: number | null
+  notes: string | null
+  isCheatDay: boolean
+  status: Status | null
+  planned: number | null
+  /** The plain target, whether or not the day is a cheat day. */
+  calorieTarget: number | null
+  tdee: number | null
+  /** The latest weigh-in before this day, however long ago. */
+  lastWeightKg: number | null
+}
+
+export interface LogWeek {
+  monday: string
+  days: LogDay[]
+  /** Only for the current week: what today and the other free days share. */
+  thisWeek: { todayBudget: number; pool: number; otherDays: number } | null
 }
 
 export interface CalendarWeek {

@@ -2,7 +2,7 @@
 
 Base URL: `http://localhost:5118` (local). All endpoints are prefixed with `/api`. Swagger UI is at `/swagger` when running locally.
 
-Every statistic is computed server-side. Reads and `PUT /api/daily-logs/{date}` take `?today=yyyy-MM-dd`, the client's **local** date. The server never uses UTC "today" for these. Errors are ProblemDetails with a readable `title`.
+Every statistic is computed server-side. Everything that depends on the date requires `?today=yyyy-MM-dd`, the client's **local** date (400 without it). The server never uses UTC "today". Errors are ProblemDetails with a readable `title`.
 
 ## Daily logs
 
@@ -20,7 +20,9 @@ Every statistic is computed server-side. Reads and `PUT /api/daily-logs/{date}` 
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/api/stats/dashboard?today=` | Tiles, budget, streak, deficits, weight, goal status, weight series |
-| GET | `/api/stats/calendar?from&to&today=` | Days (calories, target, status, planned, inGoal) and weeks |
+| GET | `/api/stats/calendar?from&to&today=` | Days (calories, target, status, planned, inGoal, notes) and weeks. Up to ten years |
+| GET | `/api/stats/log-week?date&today=` | The week around a date, with everything the log sheet shows and edits |
+| GET | `/api/stats/budget-by-window?today=` | Today's budget for each averaging window (Settings preview) |
 | GET | `/api/stats/periods?unit=week\|month&count&today=` | Average calories chart |
 | GET | `/api/stats/month/{yyyy-MM}?today=` | Month summary |
 | GET | `/api/stats/weights?from&today=` | Weigh-ins with their 7-day average |
@@ -30,12 +32,12 @@ Every statistic is computed server-side. Reads and `PUT /api/daily-logs/{date}` 
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/api/goals` | History, newest first |
+| GET | `/api/goals` | History, newest first. `changeKg`: weight change of goals that ended |
 | GET | `/api/goals/active` | Newest goal that has not ended, else 404 |
-| POST | `/api/goals?today=` | Creates a goal, ends the active one as `Replaced` |
+| POST | `/api/goals?today=` | Creates a goal, ends the active one as `Replaced` (`Reached` or `Ended` if it was reached or its date had passed) |
 | PUT | `/api/goals/{id}` | Edit in place (not an ended goal) |
 | POST | `/api/goals/{id}/end?today=` | Body `{ "reason": "Ended" \| "Reached" }` |
-| POST | `/api/goals/maintain?today=` | Ends the goal as `Maintain`, keeps the current weight, sets the calorie target |
+| POST | `/api/goals/maintain?today=` | Ends the goal as `Maintain`, keeps the target of a reached goal (the current weight otherwise), sets the calorie target |
 | DELETE | `/api/goals/{id}` | Never revives an older goal |
 
 ## Calorie goals and TDEE
@@ -44,7 +46,8 @@ Every statistic is computed server-side. Reads and `PUT /api/daily-logs/{date}` 
 |---|---|---|
 | GET/POST | `/api/calorie-goals` | History. POST `{ targetCalories }`, null turns the target off from `today` |
 | DELETE | `/api/calorie-goals/{id}` | |
-| GET/POST | `/api/tdee-entries` | TDEE history. A new entry counts from `today`; past days keep theirs |
+| GET/POST | `/api/tdee-entries` | TDEE history. A new entry counts from `today`; past days keep theirs. The first one covers the days logged before it |
+| DELETE | `/api/tdee-entries/{id}` | Its days fall back to the entry before it |
 
 ## Other
 

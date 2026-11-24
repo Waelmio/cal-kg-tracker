@@ -11,7 +11,7 @@
         <li><i :style="{ background: STATUS_COLORS.under.solid }" />On or under target</li>
         <li><i :style="{ background: STATUS_COLORS.balanced.solid }" /><InfoTip :label="`Over, ${app.settings.averagingWeeks}-week average ok`" text="Over target, but fine averaged with the weeks around it." /></li>
         <li><i :style="{ background: STATUS_COLORS.over.solid }" />Over target</li>
-        <li><i class="light" /><InfoTip label="Lighter" text="Outside your current goal." /></li>
+        <li><i class="light" /><InfoTip label="Lighter: outside the goal" text="Outside your current goal." /></li>
       </ul>
     </div>
 
@@ -26,6 +26,7 @@
           <div class="avg">{{ b.avg }}</div>
           <div class="name">{{ b.name }}</div>
           <div class="wt">{{ b.weight }}</div>
+          <div class="wt">{{ b.change }}</div>
         </div>
       </div>
     </div>
@@ -44,30 +45,37 @@ import { isoWeek } from '../../utils/dates'
 import { kcal, monthTitle, STATUS_COLORS, weight, weightChange } from '../../utils/format'
 
 const app = useAppStore()
-const modes = [{ value: 'week', label: 'Weeks' }, { value: 'month', label: 'Months' }] as const
+const modes = [{ value: 'week', label: 'Weekly' }, { value: 'month', label: 'Monthly' }] as const
 const mode = ref<'week' | 'month'>('week')
 
 const { data, loading, error, reload } = useAsyncData(() => statsApi.getPeriods(mode.value, mode.value === 'week' ? 14 : 6), [mode])
 
-const SCALE = 0.45   // px per kcal of gap
+// Pixels per kcal of gap. The half height is 96 px with the label on top, so a big gap scales every bar down.
+const ROOM = 74
+const scale = computed(() => {
+  const largest = Math.max(1, ...shown.value.map((p) => Math.abs(p.avgCalories! - (p.avgTarget ?? p.avgCalories!))))
+  return Math.min(mode.value === 'week' ? 0.45 : 0.34, ROOM / largest)
+})
+const shown = computed(() => (data.value ?? []).filter((p) => p.loggedDays > 0 && p.avgCalories != null))
 
 const bars = computed(() =>
-  (data.value ?? [])
-    .filter((p) => p.loggedDays > 0 && p.avgCalories != null && p.avgTarget != null)
+  shown.value
     .map((p) => {
-      const gap = p.avgCalories! - p.avgTarget!
-      const h = Math.max(2, Math.round(Math.abs(gap) * (mode.value === 'week' ? SCALE : 0.34)))
-      const status = p.status ?? 'under'
-      const c = STATUS_COLORS[status]
+      // Without a target there is no gap to draw, but the average is still worth showing.
+      const gap = p.avgTarget == null ? null : p.avgCalories! - p.avgTarget
+      const h = gap == null ? 0 : Math.max(2, Math.round(Math.abs(gap) * scale.value))
+      const over = gap != null && gap > 0
+      const c = STATUS_COLORS[p.status ?? 'under']
       const sofar = p.to >= app.today && p.from <= app.today
-      const name = mode.value === 'week' ? `W${isoWeek(p.from)}${sofar ? ' so far' : ''}` : monthTitle(p.from.slice(0, 7)).split(' ')[0].slice(0, 3) + (sofar ? ' so far' : '')
+      const name = (mode.value === 'week' ? `W${isoWeek(p.from)}` : monthTitle(p.from.slice(0, 7)).slice(0, 3)) + (sofar ? ' so far' : '')
       return {
         from: p.from, color: p.inGoal ? c.solid : c.light,
-        up: gap > 0 ? h : 0, down: gap > 0 ? 0 : h,
-        upLabel: gap > 0 ? `+${gap}` : '', downLabel: gap > 0 ? '' : `−${Math.abs(gap)}`,
+        up: over ? h : 0, down: over ? 0 : h,
+        upLabel: over ? `+${gap}` : '', downLabel: over || gap == null ? '' : gap === 0 ? '0' : `−${Math.abs(gap)}`,
         avg: kcal(p.avgCalories), name,
-        weight: p.avgWeightKg == null ? '' : `${weight(p.avgWeightKg, app.unit, true)}${p.weightChangeKg != null ? ' ' + weightChange(p.weightChangeKg, app.unit) : ''}`,
-        tip: `${name}: average ${p.avgCalories}, target ${p.avgTarget}`,
+        weight: p.avgWeightKg == null ? '' : `${weight(p.avgWeightKg, app.unit, true)}`,
+        change: p.weightChangeKg == null ? '' : weightChange(p.weightChangeKg, app.unit),
+        tip: `${name}: average ${p.avgCalories}, ${p.avgTarget == null ? 'no target' : `target ${p.avgTarget}`}`,
       }
     }),
 )
@@ -95,7 +103,7 @@ h2 { margin: 0; font-size: 16px; font-weight: 600; }
 .bar.bottom { border-radius: 0 0 4px 4px; }
 .lbl { font-size: 12px; color: #374151; }
 .avg { font-size: 16px; font-weight: 700; }
-.name, .wt { font-size: 12px; color: #4b5563; }
+.name, .wt { font-size: 12px; color: #4b5563; white-space: nowrap; }
 .note { margin: 0; font-size: 13px; color: #4b5563; }
 .empty { color: #4b5563; margin: 0; }
 </style>

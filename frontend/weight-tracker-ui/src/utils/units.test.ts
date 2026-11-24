@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { kgToLbs, lbsToKg, formatWeight, displayWeight, toKg, bmiLabel } from './units'
+import { kgToLbs, lbsToKg, displayWeight, toKg } from './units'
 
 describe('kgToLbs', () => {
   it('converts 1 kg to 2.2 lbs', () => {
@@ -29,15 +29,6 @@ describe('lbsToKg', () => {
   })
 })
 
-describe('formatWeight', () => {
-  it('formats kg with kg suffix', () => {
-    expect(formatWeight(70, 'kg')).toBe('70 kg')
-  })
-
-  it('formats lbs with converted value and lbs suffix', () => {
-    expect(formatWeight(1, 'lbs')).toBe('2.2 lbs')
-  })
-})
 
 describe('displayWeight', () => {
   it('returns kg value unchanged for kg unit', () => {
@@ -59,43 +50,6 @@ describe('toKg', () => {
   })
 })
 
-describe('bmiLabel', () => {
-  it('returns Underweight for BMI below 18.5', () => {
-    const result = bmiLabel(17)
-    expect(result.text).toBe('Underweight')
-    expect(result.color).toBe('text-blue-500')
-  })
-
-  it('returns Normal for BMI between 18.5 and 24.9', () => {
-    const result = bmiLabel(22)
-    expect(result.text).toBe('Normal')
-    expect(result.color).toBe('text-green-600')
-  })
-
-  it('returns Overweight for BMI between 25 and 29.9', () => {
-    const result = bmiLabel(27)
-    expect(result.text).toBe('Overweight')
-    expect(result.color).toBe('text-yellow-500')
-  })
-
-  it('returns Obese for BMI 30 and above', () => {
-    const result = bmiLabel(35)
-    expect(result.text).toBe('Obese')
-    expect(result.color).toBe('text-red-500')
-  })
-
-  it('uses boundary values correctly (18.5 is Normal)', () => {
-    expect(bmiLabel(18.5).text).toBe('Normal')
-  })
-
-  it('uses boundary values correctly (25 is Overweight)', () => {
-    expect(bmiLabel(25).text).toBe('Overweight')
-  })
-
-  it('uses boundary values correctly (30 is Obese)', () => {
-    expect(bmiLabel(30).text).toBe('Obese')
-  })
-})
 
 describe('lbs round trip', () => {
   it('keeps 2 decimals instead of rounding to 0.1 kg', () => {

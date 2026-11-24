@@ -10,7 +10,7 @@ describe('errorMessage', () => {
     expect(m).toBe('Request failed')
   })
   it('reads the first validation error', () => {
-    expect(errorMessage({ response: { data: { errors: { Date: ['Date is required'] } } } })).toBe('Date is required')
+    expect(errorMessage({ response: { data: { title: 'One or more validation errors occurred.', errors: { Date: ['Date is required'] } } } })).toBe('Date is required')
   })
   it('accepts a plain string body', () => {
     expect(errorMessage({ response: { data: 'nope' } })).toBe('nope')

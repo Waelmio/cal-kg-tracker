@@ -4,7 +4,7 @@
       <h1>History</h1>
       <div class="jump">
         <label for="jump">Go to</label>
-        <input id="jump" type="month" :value="jumpValue" :max="monthOf(app.today)" @change="jumpTo(($event.target as HTMLInputElement).value)" />
+        <input id="jump" type="month" :value="jumpMonth ?? monthOf(app.today)" :max="monthOf(app.today)" @change="jumpTo(($event.target as HTMLInputElement).value)" />
       </div>
     </div>
 
@@ -35,7 +35,7 @@
 
     <div v-if="loading && !data" class="muted" aria-busy="true">Loading…</div>
 
-    <section v-for="w in weeks" :key="w.monday" class="week">
+    <section v-for="w in weeks" :id="`w-${w.monday}`" :key="w.monday" class="week">
       <button type="button" class="wk-head" :style="{ background: tint(w.figures.status) }" :aria-expanded="isOpen(w.monday)" @click="toggle(w.monday)">
         <span class="sw" :style="{ background: w.figures.status ? STATUS_COLORS[w.figures.status].solid : '#d1d5db' }" />
         <span class="c1"><strong>W{{ w.isoWeek }}</strong> <span class="range">{{ shortDate(w.monday) }} to {{ addDays(w.monday, 6) >= app.today && w.monday <= app.today ? 'today' : shortDate(addDays(w.monday, 6)) }}</span></span>
@@ -47,14 +47,14 @@
       </button>
       <div v-if="isOpen(w.monday)" class="table-wrap">
         <table>
-          <thead><tr><th class="w1">Day</th><th class="w1">Calories</th><th class="w2">Against target</th><th class="w3">Weight</th><th>Note</th><th class="w4"><span class="sr">Actions</span></th></tr></thead>
+          <thead><tr><th class="w1">Day</th><th class="w1">Calories</th><th class="w2 wide">Against target</th><th class="w3">Weight</th><th class="wide">Note</th><th class="w4"><span class="sr">Actions</span></th></tr></thead>
           <tbody>
             <tr v-for="d in w.days" :key="d.date">
-              <td class="day">{{ dayName(d.date) }}</td>
+              <td class="day">{{ dayName(d.date) }}<span v-if="remark(d)" class="under">{{ remark(d) }}</span></td>
               <td><span v-if="d.calories != null" class="chip" :style="chipStyle(d)">{{ d.calories }}</span><span v-else-if="d.planned != null" class="plan">plan {{ d.planned }}</span><span v-else class="plan">{{ d.date < app.today ? 'no log' : '' }}</span></td>
-              <td class="gray">{{ d.calories != null && d.target != null ? (d.calories <= d.target ? `${d.target - d.calories} under` : `${d.calories - d.target} over`) : '' }}</td>
+              <td class="gray wide">{{ d.calories != null && d.target != null ? (d.calories <= d.target ? `${d.target - d.calories} under` : `${d.calories - d.target} over`) : '' }}</td>
               <td>{{ d.weightKg == null ? '' : weight(d.weightKg, app.unit) + ' ' + app.unit }}</td>
-              <td class="gray">{{ [d.isCheatDay ? 'cheat day' : '', notes.get(d.date) ?? ''].filter(Boolean).join(', ') }}</td>
+              <td class="gray wide">{{ remark(d) }}</td>
               <td class="r"><button type="button" class="link" :aria-label="`${hasData(d) ? 'Edit' : 'Add'} ${longDate(d.date)}`" @click="sheet.open(d.date)">{{ hasData(d) ? 'Edit' : 'Add' }}</button></td>
             </tr>
           </tbody>
@@ -62,22 +62,21 @@
       </div>
     </section>
 
-    <button type="button" class="more" @click="older += 8">Show older weeks</button>
+    <button v-if="hasOlder" type="button" class="more" @click="older += 8">Show older weeks</button>
   </main>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import ErrorNote from '../components/ui/ErrorNote.vue'
 import { useAppStore } from '../stores/app'
 import { useLogSheetStore } from '../stores/logSheet'
 import { useAsyncData } from '../composables/useAsyncData'
 import * as statsApi from '../api/stats'
-import * as logApi from '../api/dailyLog'
-import { addDays, mondayOf, monthOf, daysBetween } from '../utils/dates'
+import { addDays, daysBetween, lastDayOfMonth, mondayOf, monthOf } from '../utils/dates'
 import { CALENDAR_COLORS, kcal, longDate, shortDate, STATUS_COLORS, weekdayShort, weight, weightChange } from '../utils/format'
 import type { CalendarDay, Status } from '../types'
-import { displayWeight } from '../utils/units'
+import { toUnit } from '../utils/units'
 import { niceTicks } from '../utils/chart'
 
 const app = useAppStore()
@@ -96,34 +95,42 @@ const oldest = computed(() => {
   if (jumpMonth.value && `${jumpMonth.value}-01` < from) from = mondayOf(`${jumpMonth.value}-01`)
   return from
 })
-const jumpValue = computed(() => jumpMonth.value ?? monthOf(app.today))
-function jumpTo(v: string) { if (v) jumpMonth.value = v }
 
-const { data, loading, error, reload } = useAsyncData(async () => {
-  const to = addDays(mondayOf(app.today), 6)
-  const [calendar, logs] = await Promise.all([statsApi.getCalendar(oldest.value, to), logApi.getAll({ from: oldest.value, to })])
-  return { calendar, logs }
-}, [oldest])
+const { data, loading, error, reload } = useAsyncData(() => statsApi.getCalendar(oldest.value, addDays(mondayOf(app.today), 6)), [oldest])
+
+// The month's last week, opened and brought into view once its weeks are loaded.
+async function jumpTo(v: string) {
+  if (!v) return
+  jumpMonth.value = v
+  await nextTick()
+  if (loading.value) await new Promise<void>((done) => { const stop = watch(loading, (l) => { if (!l) { stop(); done() } }) })
+  await nextTick()
+  const last = mondayOf(lastDayOfMonth(v))
+  const monday = last > mondayOf(app.today) ? mondayOf(app.today) : last
+  if (!isOpen(monday)) toggle(monday)
+  await nextTick()
+  document.getElementById(`w-${monday}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
 
 const weightsFrom = computed(() => addDays(app.today, -range.value))
 const { data: weights, loading: loadingWeights } = useAsyncData(() => statsApi.getWeights(weightsFrom.value), [weightsFrom])
 const { data: dash } = useAsyncData(() => statsApi.getDashboard())
+const hasOlder = computed(() => dash.value?.firstLog != null && dash.value.firstLog < oldest.value)
 
 const tint = (s: Status | null) => (s === 'under' ? '#ecfdf5' : s === 'balanced' ? '#fffbeb' : s === 'over' ? '#fff1f2' : '#ffffff')
 const dayName = (d: string) => `${weekdayShort(d)} ${shortDate(d)}`
-const hasData = (d: CalendarDay) => d.calories != null || d.weightKg != null
+const hasData = (d: CalendarDay) => d.calories != null || d.weightKg != null || d.isCheatDay || !!d.notes
+const remark = (d: CalendarDay) => [d.isCheatDay ? 'cheat day' : '', d.notes ?? ''].filter(Boolean).join(', ')
 function chipStyle(d: CalendarDay) {
   if (!d.status) return { background: '#f3f4f6', color: '#4b5563' }
   const [bg, fg] = CALENDAR_COLORS[d.inGoal ? 'day' : 'dayOut'][d.status]
   return { background: bg, color: fg }
 }
 
-const notes = computed(() => new Map((data.value?.logs ?? []).filter((l) => l.notes).map((l) => [l.date, l.notes!])))
-
 const weeks = computed(() => {
   if (!data.value) return []
-  const days = new Map(data.value.calendar.days.map((d) => [d.date, d]))
-  return [...data.value.calendar.weeks]
+  const days = new Map(data.value.days.map((d) => [d.date, d]))
+  return [...data.value.weeks]
     .sort((a, b) => b.monday.localeCompare(a.monday))
     .map((w) => ({ ...w, days: Array.from({ length: 7 }, (_, i) => days.get(addDays(w.monday, i))!).filter(Boolean).reverse() }))
 })
@@ -149,7 +156,7 @@ const chart = computed(() => {
   const first = pts[0].date
   const last = app.today
   const span = Math.max(daysBetween(first, last), 1)
-  const vals = pts.flatMap((p) => [displayWeight(p.kg, app.unit), displayWeight(p.avg7, app.unit)])
+  const vals = pts.flatMap((p) => [toUnit(p.kg, app.unit), toUnit(p.avg7, app.unit)])
   const ticks = niceTicks(Math.min(...vals), Math.max(...vals))
   const min = ticks[0], max = ticks[ticks.length - 1]
   const x = (d: string) => left + (daysBetween(first, d) / span) * (w - left - right)
@@ -166,8 +173,8 @@ const chart = computed(() => {
       { date: first, x: left, label: shortDate(first, true), anchor: 'start' },
       { date: last, x: w - right, label: shortDate(last, true), anchor: 'end' },
     ],
-    dots: pts.map((p) => ({ x: f(x(p.date)), y: f(y(displayWeight(p.kg, app.unit))) })),
-    line: pts.map((p, i) => `${i ? 'L' : 'M'}${f(x(p.date))} ${f(y(displayWeight(p.avg7, app.unit)))}`).join(''),
+    dots: pts.map((p) => ({ x: f(x(p.date)), y: f(y(toUnit(p.kg, app.unit))) })),
+    line: pts.map((p, i) => `${i ? 'L' : 'M'}${f(x(p.date))} ${f(y(toUnit(p.avg7, app.unit)))}`).join(''),
     goal: goal && gEnd > gStart ? { x: f(left + (gStart / span) * (w - left - right)), w: f(((gEnd - gStart) / span) * (w - left - right)) } : null,
   }
 })
@@ -215,5 +222,17 @@ td.r { text-align: right; }
 .link { display: inline-flex; align-items: center; min-height: 44px; padding: 0 6px; background: none; border: 0; font: inherit; font-weight: 600; color: #0369a1; }
 .link:focus-visible { outline: 2px solid #0284c7; }
 .sr { position: absolute; left: -9999px; }
+.under { display: none; font-weight: 400; font-size: 13px; color: #4b5563; }
+.week { scroll-margin-top: 8px; }
+/* On a phone everything fits without scrolling sideways: the note goes under the day. */
+@media (max-width: 639px) {
+  table { min-width: 0; }
+  .wide { display: none; }
+  .under { display: block; overflow-wrap: anywhere; }
+  .w1 { width: auto; } .w1 + .w1 { width: 84px; } .w3 { width: 76px; } .w4 { width: 46px; }
+  td.day { white-space: nowrap; font-size: 15px; }
+  .under { white-space: normal; }
+  .table-wrap { padding: 0 14px 8px; }
+}
 .more { align-self: center; min-height: 44px; padding: 0 20px; border: 1px solid #9ca3af; border-radius: 8px; background: #fff; color: #1f2937; font: inherit; font-weight: 600; }
 </style>

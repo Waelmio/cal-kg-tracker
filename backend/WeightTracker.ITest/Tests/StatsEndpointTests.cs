@@ -84,7 +84,7 @@ public abstract class StatsEndpointTestsBase
         Assert.Equal(1850, days[2].GetProperty("calorieTarget").GetInt32());   // the plain target, the sheet toggles cheat itself
         Assert.Equal(2350, days[2].GetProperty("tdee").GetInt32());
         Assert.Equal(83.8, days[6].GetProperty("lastWeightKg").GetDouble());
-        Assert.Equal(days[1].GetProperty("planned").GetInt32(), w.GetProperty("thisWeek").GetProperty("todayBudget").GetInt32());
+        Assert.Equal(days[1].GetProperty("planned").GetInt32(), w.GetProperty("thisWeek").GetProperty("todayBudget").GetDouble(), 0.5);
         Assert.Equal(5, w.GetProperty("thisWeek").GetProperty("otherDays").GetInt32());
 
         // Another week has no pool to share, and a day far in the future still knows the last weight.
@@ -97,12 +97,12 @@ public abstract class StatsEndpointTestsBase
     public async Task ThePool_DoesNotDependOnWhatIsEatenToday()
     {
         var client = await LoadFixtureAsync();
-        async Task<int> Pool(int kcal)
+        async Task<double> Pool(int kcal)
         {
             await client.PutAsJsonAsync($"/api/daily-logs/{Today}?today={Today}", new { date = Today, caloriesKcal = kcal });
-            return (await Get(client, $"/api/stats/log-week?date={Today}&today={Today}")).GetProperty("thisWeek").GetProperty("pool").GetInt32();
+            return (await Get(client, $"/api/stats/log-week?date={Today}&today={Today}")).GetProperty("thisWeek").GetProperty("pool").GetDouble();
         }
-        Assert.Equal(await Pool(1240), await Pool(2400));
+        Assert.Equal(await Pool(1240), await Pool(2400), 6);
         // 2400 eaten leaves 1777 for each of the five other days (PLAN.md 3.11).
         Assert.Equal(1777, (int)Math.Round((await Pool(2400) - 2400) / 5.0));
     }

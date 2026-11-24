@@ -7,16 +7,16 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted } from 'vue'
+import { onBeforeUnmount, onMounted, watch } from 'vue'
 import AppNav from './components/layout/AppNav.vue'
 import LogSheet from './components/daylog/LogSheet.vue'
 import { useAppStore } from './stores/app'
 import { useLogSheetStore } from './stores/logSheet'
-import { useDayDataStore } from './stores/dayData'
+import { useLogWeeksStore } from './stores/logWeeks'
 
 const app = useAppStore()
 const sheet = useLogSheetStore()
-const dayData = useDayDataStore()
+const logWeeks = useLogWeeksStore()
 
 // The tab may stay open overnight: when it becomes visible again, re-read the local date and refetch.
 function onVisible() {
@@ -26,10 +26,9 @@ function onVisible() {
 onMounted(async () => {
   document.addEventListener('visibilitychange', onVisible)
   await app.loadSettings().catch(() => {})
-  app.refresh()
-  // Warm the cache so the log sheet opens with its data already there.
-  dayData.prefetch(app.today)
 })
+// Keep this week ready, so the log sheet opens with its data already there.
+watch(() => app.version, () => { logWeeks.load(app.today) }, { immediate: true, flush: 'post' })
 onBeforeUnmount(() => document.removeEventListener('visibilitychange', onVisible))
 </script>
 

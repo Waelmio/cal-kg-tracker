@@ -71,7 +71,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import Modal from '../components/ui/Modal.vue'
 import { useAppStore } from '../stores/app'
 import { clearData, exportData, importData } from '../api/data'
@@ -100,15 +100,17 @@ onMounted(async () => {
   form.heightCm = app.settings.heightCm
   form.preferredUnit = app.settings.preferredUnit
   form.averagingWeeks = app.settings.averagingWeeks
-  budgets.value = await statsApi.getBudgetByWindow().catch(() => [])
 })
+
+// The preview follows whatever changes the budget: a save, an import, clearing the data.
+watch(() => app.version, async () => { budgets.value = await statsApi.getBudgetByWindow().catch(() => []) }, { immediate: true })
 
 async function save() {
   saving.value = true
   saved.value = false
   saveError.value = ''
   try {
-    await app.saveSettings({ ...app.settings, heightCm: form.heightCm || null, preferredUnit: form.preferredUnit, averagingWeeks: form.averagingWeeks })
+    await app.saveSettings({ heightCm: form.heightCm || null, preferredUnit: form.preferredUnit, averagingWeeks: form.averagingWeeks })
     saved.value = true
   } catch (e) {
     saveError.value = (e as Error).message
@@ -164,6 +166,7 @@ async function onPick(event: Event) {
   if (!file) return
   dataError.value = ''
   imported.value = false
+  cleared.value = false
   try {
     pending.value = { name: file.name, data: JSON.parse(await file.text()) }
   } catch {

@@ -182,6 +182,7 @@ public sealed class StatsCalculator(StatsData data)
         IReadOnlyDictionary<DateOnly, int> Days,        // today..Sunday, rounded, planned days included
         IReadOnlySet<DateOnly> UserLogged,              // future days the user logged (kept as typed)
         int TodayBudget,
+        double TodayExact,                              // the same, before rounding
         double Pool,                                    // what all the free days (today included) share, before clamping
         bool ReachesTarget,                             // false when even this plan leaves the window over target
         IReadOnlyDictionary<DateOnly, int> FutureDays); // the next Window-1 weeks (see FutureBudget)
@@ -230,7 +231,7 @@ public sealed class StatsCalculator(StatsData data)
         var days = new SortedDictionary<DateOnly, int>();
         foreach (var d in rest) days[d] = Rnd(planned.TryGetValue(d, out var typed) ? typed : result[d]);
 
-        return new BudgetResult(days, planned.Keys.ToHashSet(), Rnd(todayBudget),
+        return new BudgetResult(days, planned.Keys.ToHashSet(), Rnd(todayBudget), todayBudget,
             targets - eatenPast - planned.Values.Sum(), reaches, FutureBudget(monday, simulated));
     }
 

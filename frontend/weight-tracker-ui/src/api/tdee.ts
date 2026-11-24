@@ -6,3 +6,5 @@ export const getEntries = () => client.get<TdeeEntry[]>('/tdee-entries').then((r
 
 export const addEntry = (kcal: number, source: 'Manual' | 'Estimate' = 'Manual') =>
   client.post<TdeeEntry>('/tdee-entries', { kcal, source }, { params: { today: localToday() } }).then((r) => r.data)
+
+export const removeEntry = (id: number) => client.delete(`/tdee-entries/${id}`).then(() => {})

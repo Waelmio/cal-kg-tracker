@@ -11,21 +11,21 @@
         </div>
         <StatusChip>Tracking only</StatusChip>
       </div>
-      <p v-if="dash?.weight.kg != null" class="line"><strong>{{ weight(dash.weight.kg, app.unit) }} {{ app.unit }}</strong><template v-if="dash.weight.paceKgPerWeek != null">, {{ dash.weight.paceKgPerWeek < 0 ? 'losing' : 'gaining' }} {{ weight(Math.abs(dash.weight.paceKgPerWeek), app.unit) }} {{ app.unit }} a week</template></p>
+      <p v-if="dash?.weight.kg != null" class="line"><strong>{{ weight(dash.weight.kg, app.unit) }} {{ app.unit }}</strong><template v-if="dash.weight.paceKgPerWeek != null">, {{ dash.weight.paceKgPerWeek < 0 ? 'losing' : 'gaining' }} {{ amount(Math.abs(dash.weight.paceKgPerWeek), app.unit) }} {{ app.unit }} a week</template></p>
       <p v-if="dash && !dash.deficits.overall.sinceGoalStart && dash.deficits.overall.loggedDays" class="line">Deficit, last four full weeks: <strong>{{ dash.deficits.overall.kcal }} kcal</strong></p>
       <p v-if="dash?.calorieTarget" class="line">Your {{ dash.calorieTarget }} kcal daily target still applies. It is separate from the weight goal.</p>
       <div v-if="!form" class="row">
         <button type="button" class="btn solid" @click="form = 'new'">Set a weight goal</button>
-        <button v-if="dash?.calorieTarget" type="button" class="btn outline" @click="$emit('turn-off-target')">Turn off calorie target</button>
+        <button v-if="dash?.calorieTarget" type="button" class="btn plain" @click="$emit('turn-off-target')">Turn off calorie target</button>
       </div>
     </section>
 
     <!-- A goal -->
-    <section v-else class="panel blue" aria-labelledby="wg">
+    <section v-else class="panel" :class="tone" aria-labelledby="wg">
       <div class="head">
         <div>
           <h2 id="wg">Weight goal</h2>
-          <div class="big">{{ bigTarget }} <span class="by">{{ status.kind === 'Maintain' ? 'keep your current weight' : status.targetDate ? 'by ' + fullDateShort(status.targetDate) : '' }}</span></div>
+          <div class="big">{{ goalWeight(status, app.unit) }} <span class="by">{{ status.kind === 'Maintain' ? 'to keep' : status.targetDate ? 'by ' + shortDate(status.targetDate, true) : '' }}</span></div>
         </div>
         <StatusChip :kind="chip.kind">{{ chip.text }}</StatusChip>
       </div>
@@ -35,27 +35,28 @@
         <div class="caption">
           <span>{{ weight(status.startingWeightKg, app.unit) }} {{ app.unit }} on {{ shortDate(status.startDate) }}</span>
           <strong class="now">{{ weight(status.currentKg, app.unit) }} {{ app.unit }} now, {{ Math.round(status.progressPercent) }}%</strong>
-          <span>{{ weight(status.remainingKg, app.unit) }} {{ app.unit }} to go</span>
+          <span>{{ status.state === 'reached' ? '' : `${weight(status.remainingKg, app.unit)} ${app.unit} to go` }}</span>
         </div>
       </div>
 
+      <div v-if="reached" class="mid">{{ reached.change }} <span class="by">{{ reached.time }}</span></div>
       <p v-if="status.state !== 'active' || status.kind === 'Maintain'" class="line">{{ sentence }}</p>
 
       <div v-if="status.kind === 'Reach' && status.state === 'active'" class="cols">
         <div class="col">
-          <h3>Weight {{ losing ? 'loss' : 'gain' }} per week</h3>
+          <h3>Weight {{ status.losing ? 'loss' : 'gain' }} per week</h3>
           <div v-for="r in rates" :key="r.name" class="rate">
-            <span class="rn">{{ r.name }}</span>
+            <span class="rn"><InfoTip v-if="r.tip" :label="r.name" :text="r.tip" /><template v-else>{{ r.name }}</template></span>
             <div class="rbar"><div :style="{ width: r.w + '%', background: r.color }" /></div>
-            <strong class="rv">{{ r.v }}</strong>
+            <strong class="rv" :class="{ bad: r.wrongWay }">{{ r.v }}</strong>
           </div>
           <div class="line">{{ sentence }}</div>
         </div>
         <div v-if="bmi" class="col">
           <h3><InfoTip label="BMI" text="Weight compared with height." /></h3>
           <div class="bmi">
-            <span class="pin" :style="{ left: bmi.goal + '%', marginLeft: '-60px' }">{{ dash!.weight.bmiAtGoal }} goal</span>
-            <span class="pin" :style="{ left: bmi.now + '%' }">{{ dash!.weight.bmi }} now</span>
+            <span class="pin" :style="{ left: bmi.goal + '%', marginLeft: bmi.goal <= bmi.now ? '-66px' : '6px' }">{{ dash!.weight.bmiAtGoal }} goal</span>
+            <span class="pin" :style="{ left: bmi.now + '%', marginLeft: bmi.goal <= bmi.now ? '6px' : '-66px' }">{{ dash!.weight.bmi }} now</span>
             <div class="scale"><i style="width: 8.3%; background: #7dd3fc; border-radius: 4px 0 0 4px" /><i style="width: 36.1%; background: #00bc7d" /><i style="width: 27.8%; background: #ffb900" /><i style="width: 27.8%; background: #ff2056; border-radius: 0 4px 4px 0" /></div>
             <div class="tick" :style="{ left: bmi.goal + '%' }" /><div class="tick" :style="{ left: bmi.now + '%' }" />
           </div>
@@ -66,26 +67,27 @@
       <div v-if="!form" class="row">
         <template v-if="status.state === 'active'">
           <button v-if="status.kind === 'Reach'" type="button" class="btn solid" @click="form = 'edit'" :aria-expanded="false">Edit goal</button>
-          <button v-if="status.kind === 'Reach' && status.pace === 'behind' && status.projectedDate" type="button" class="btn outline" :disabled="busy" @click="moveDate(status.projectedDate)">Move date to {{ shortDate(status.projectedDate) }}</button>
-          <button type="button" class="btn outline" :disabled="busy" @click="end('Ended')">End goal</button>
+          <button v-if="status.kind === 'Reach' && status.pace === 'behind' && status.projectedDate" type="button" class="btn plain" :disabled="busy" @click="moveDate(status.projectedDate)">Move date to {{ shortDate(status.projectedDate) }}</button>
+          <button type="button" class="btn plain" :disabled="busy" @click="end('Ended')">End goal</button>
         </template>
         <template v-else-if="status.state === 'reached'">
-          <button type="button" class="btn solid" :disabled="busy" @click="maintain">Maintain {{ weight(status.targetWeightKg, app.unit) }} {{ app.unit }}</button>
-          <button type="button" class="btn outline" @click="form = 'new'">New goal</button>
-          <button type="button" class="btn outline" :disabled="busy" @click="end('Reached')">No goal</button>
+          <button type="button" class="btn solid" :disabled="busy" @click="maintain">Maintain {{ goalWeight(status, app.unit) }}</button>
+          <button type="button" class="btn plain" @click="form = 'new'">New goal</button>
+          <button type="button" class="btn plain" :disabled="busy" @click="end('Reached')">No goal</button>
         </template>
         <template v-else>
           <button v-if="status.projectedDate" type="button" class="btn solid" :disabled="busy" @click="moveDate(status.projectedDate)">Extend to {{ shortDate(status.projectedDate) }}</button>
-          <button type="button" class="btn outline" @click="form = 'new'">New goal</button>
-          <button type="button" class="btn outline" :disabled="busy" @click="end('Ended')">Close it</button>
+          <button v-else type="button" class="btn solid" @click="form = 'edit'">Change the date</button>
+          <button type="button" class="btn plain" @click="form = 'new'">New goal</button>
+          <button type="button" class="btn plain" :disabled="busy" @click="end('Ended')">Close it</button>
         </template>
       </div>
       <p v-if="advice && status.state === 'active'" class="note">{{ advice }}</p>
-      <p v-if="status.state === 'reached'" class="note">Maintaining keeps you within 1 {{ app.unit }} of {{ weight(status.targetWeightKg, app.unit) }} and sets the target to the calories that keep your current weight.</p>
+      <p v-if="status.state === 'reached'" class="note">Maintaining keeps you within {{ amount(status.maintainBandKg, app.unit) }} {{ app.unit }} of {{ goalWeight(status, app.unit) }} and sets the target to the calories that keep your current weight.</p>
       <p v-if="status.state === 'datePassed'" class="note">Until you choose, the dashboard runs as tracking only. The goal stays in your history.</p>
-      <GoalForm v-if="form" :goal="form === 'edit' ? activeGoal : null" @saved="form = null; $emit('changed')" @cancel="form = null" />
+      <GoalForm v-if="form" :goal="form === 'edit' ? activeGoal : null" @saved="form = null" @cancel="form = null" />
     </section>
-    <GoalForm v-if="form && (!status || status.state === 'none')" :goal="null" @saved="form = null; $emit('changed')" @cancel="form = null" />
+    <GoalForm v-if="form && (!status || status.state === 'none')" :goal="null" @saved="form = null" @cancel="form = null" />
 
     <section v-if="past.length" class="past" aria-labelledby="pg">
       <h2 id="pg">Past goals</h2>
@@ -95,7 +97,7 @@
           <tbody>
             <tr v-for="g in past" :key="g.id">
               <td class="b">{{ g.kind === 'Maintain' ? `Keep ${weight(g.targetWeightKg, app.unit)} ${app.unit}` : `${weight(g.startingWeightKg, app.unit)} to ${weight(g.targetWeightKg, app.unit)} ${app.unit}` }}</td>
-              <td>{{ shortDate(g.startDate) }} to {{ g.endedOn ? shortDate(g.endedOn, true) : '' }}</td>
+              <td>{{ shortDate(g.startDate, g.startDate.slice(0, 4) !== g.endedOn?.slice(0, 4)) }} to {{ g.endedOn ? shortDate(g.endedOn, true) : '' }}</td>
               <td>{{ result(g) }}</td>
               <td><span class="pill">{{ outcome(g.endReason) }}</span></td>
             </tr>
@@ -114,13 +116,13 @@ import InfoTip from '../ui/InfoTip.vue'
 import GoalForm from './GoalForm.vue'
 import { useAppStore } from '../../stores/app'
 import * as goalsApi from '../../api/goals'
-import { fullDate, shortDate, weight } from '../../utils/format'
-import { goalChip, goalSentence } from '../../utils/goalText'
-import { displayWeight } from '../../utils/units'
+import { amount, shortDate, weight } from '../../utils/format'
+import { goalChip, goalSentence, goalWeight, reachedText } from '../../utils/goalText'
+import { toUnit } from '../../utils/units'
 import type { DashboardStats, Goal, GoalEndReason } from '../../types'
 
 const props = defineProps<{ dash: DashboardStats | null; goals: Goal[] }>()
-const emit = defineEmits<{ changed: []; 'turn-off-target': [] }>()
+defineEmits<{ 'turn-off-target': [] }>()
 
 const app = useAppStore()
 const status = computed(() => props.dash?.goal ?? null)
@@ -130,11 +132,10 @@ const form = ref<'new' | 'edit' | null>(null)
 const busy = ref(false)
 const actionError = ref('')
 
-const chip = computed(() => goalChip(status.value!))
+const chip = computed(() => goalChip(status.value!, app.unit))
+const reached = computed(() => reachedText(status.value!, app.unit))
+const tone = computed(() => (status.value?.state === 'reached' ? 'green' : status.value?.state === 'datePassed' ? 'yellow' : 'blue'))
 const sentence = computed(() => goalSentence(status.value!, app.unit))
-const losing = computed(() => (status.value?.startingWeightKg ?? 0) > (status.value?.targetWeightKg ?? 0))
-const bigTarget = computed(() => `${weight(status.value!.targetWeightKg, app.unit).replace(/\.0$/, '')} ${app.unit}`)
-const fullDateShort = (d: string) => fullDate(d).replace(/^(\d+) (\w{3})\w* /, '$1 $2 ')
 
 const advice = computed(() => {
   const c = props.dash?.targetComparison
@@ -147,12 +148,18 @@ const rates = computed(() => {
   const s = status.value
   const c = props.dash?.targetComparison
   if (!s) return []
-  const rows: { name: string; kg: number; color: string }[] = []
-  if (s.neededKgPerWeek != null) rows.push({ name: 'Needed', kg: s.neededKgPerWeek, color: '#7dd3fc' })
-  if (c?.targetKgPerWeek != null && c.target != null) rows.push({ name: `At ${c.target} a day`, kg: Math.abs(c.targetKgPerWeek), color: '#fb923c' })
-  if (s.paceKgPerWeek != null) rows.push({ name: 'Your pace', kg: Math.abs(s.paceKgPerWeek), color: '#0284c7' })
+  // Kg a week towards the goal: negative is moving away from it.
+  const towards = (lossPerWeek: number) => (s.losing ? lossPerWeek : -lossPerWeek)
+  const rows: { name: string; kg: number; color: string; tip?: string }[] = []
+  if (s.neededKgPerWeek != null) rows.push({ name: 'Needed', kg: s.neededKgPerWeek, color: '#7dd3fc', tip: `Weekly ${s.losing ? 'loss' : 'gain'} to reach your goal on time.` })
+  if (c?.targetKgPerWeek != null && c.target != null) rows.push({ name: `At ${c.target} a day`, kg: towards(c.targetKgPerWeek), color: '#fb923c' })
+  if (s.paceKgPerWeek != null) rows.push({ name: 'Your pace', kg: towards(-s.paceKgPerWeek), color: '#0284c7', tip: 'Trend of your weigh-ins over the last 28 days.' })
   const max = Math.max(...rows.map((r) => r.kg), 0.001)
-  return rows.map((r) => ({ name: r.name, color: r.color, w: Math.round((r.kg / max) * 100), v: `${(Math.round(displayWeight(r.kg, app.unit) * 100) / 100).toFixed(2)} ${app.unit}` }))
+  return rows.map((r) => ({
+    name: r.name, color: r.color, tip: r.tip, wrongWay: r.kg < 0,
+    w: Math.max(0, Math.round((r.kg / max) * 100)),
+    v: `${r.kg < 0 ? (s.losing ? '▲ ' : '▼ ') : ''}${toUnit(Math.abs(r.kg), app.unit).toFixed(2)} ${app.unit}`,
+  }))
 })
 
 // BMI scale from 17 to 35.
@@ -168,7 +175,6 @@ async function run(fn: () => Promise<unknown>) {
   try {
     await fn()
     app.refresh()
-    emit('changed')
   } catch (e) {
     actionError.value = (e as Error).message
   } finally {
@@ -185,11 +191,7 @@ const moveDate = (date: string) => {
 }
 
 function result(g: Goal) {
-  if (g.endReason === 'Reached' && g.startingWeightKg != null) {
-    const d = g.startingWeightKg - g.targetWeightKg
-    return `${weight(Math.abs(d), app.unit)} ${app.unit} ${d >= 0 ? 'lost' : 'gained'}`
-  }
-  return '–'
+  return g.changeKg == null ? '–' : `${weight(Math.abs(g.changeKg), app.unit)} ${app.unit} ${g.changeKg <= 0 ? 'lost' : 'gained'}`
 }
 function outcome(r: GoalEndReason | null) {
   return r === 'Reached' ? 'Reached' : r === 'Replaced' ? 'Replaced by a new goal' : r === 'Maintain' ? 'Switched to maintaining' : 'Ended early'
@@ -200,6 +202,9 @@ function outcome(r: GoalEndReason | null) {
 .stack { display: flex; flex-direction: column; gap: 16px; }
 .panel { border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
 .panel.blue { background: #f0f9ff; border: 1px solid #bae6fd; }
+.panel.green { background: #ecfdf5; border: 1px solid #a4f4cf; }
+.panel.yellow { background: #fffbeb; border: 1px solid #fee685; }
+.mid { font-size: 22px; font-weight: 700; }
 .head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 8px 16px; }
 h2 { margin: 0; font-size: 14px; font-weight: 600; color: #0369a1; }
 h3 { margin: 0; font-size: 14px; font-weight: 600; }
@@ -218,6 +223,7 @@ h3 { margin: 0; font-size: 14px; font-weight: 600; }
 .rbar { height: 14px; }
 .rbar > div { height: 14px; border-radius: 0 4px 4px 0; }
 .rv { text-align: right; white-space: nowrap; }
+.rv.bad { color: #c70036; }
 .bmi { position: relative; padding-top: 22px; }
 .pin { position: absolute; top: 0; width: 60px; text-align: center; font-weight: 700; white-space: nowrap; }
 .scale { display: flex; gap: 2px; height: 14px; }
@@ -228,7 +234,7 @@ h3 { margin: 0; font-size: 14px; font-weight: 600; }
 .btn { min-height: 44px; padding: 0 18px; border-radius: 8px; font: inherit; font-weight: 600; }
 .btn.solid { border: 0; background: #0369a1; color: #fff; }
 .btn.solid:hover:not(:disabled) { background: #075985; }
-.btn.outline { border: 1px solid #7dd3fc; background: #fff; color: #075985; }
+.btn.plain { border: 1px solid #7dd3fc; background: #fff; color: #075985; }
 .btn:focus-visible { outline: 2px solid #0284c7; outline-offset: 2px; }
 .note { margin: 0; color: #4b5563; font-size: 13px; }
 .past { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 10px; }

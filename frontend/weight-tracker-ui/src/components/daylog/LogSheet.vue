@@ -11,14 +11,14 @@
       <!-- Desktop: the week -->
       <div class="week" role="group" aria-label="Week">
         <button type="button" class="box" aria-label="Previous week" @click="go(-7)">‹</button>
-        <button v-for="d in weekDays" :key="d.date" type="button" class="day" :aria-pressed="d.date === date" @click="select(d.date)">
+        <button v-for="d in weekDays" :key="d.date" type="button" class="day" :class="{ plan: d.planned }" :style="d.style" :aria-pressed="d.date === date" @click="select(d.date)">
           <span class="dn">{{ d.name }}</span>
           <span v-if="ready" class="dk">{{ d.kcal }}</span><span v-else class="skel dk-skel" />
         </button>
         <button type="button" class="box" aria-label="Next week" @click="go(7)">›</button>
       </div>
 
-      <ErrorNote v-if="loadError" :message="loadError" :retry="() => store.prefetch(date)" />
+      <ErrorNote v-if="loadError" :message="loadError" :retry="() => store.load(date)" />
 
       <!-- Nothing cached yet: placeholders with the shape of the form, shimmering -->
       <div v-if="!ready" class="cols" data-test="skeleton" aria-busy="true" aria-label="Loading the day">
@@ -49,13 +49,14 @@
           </div>
           <div class="stepper">
             <button type="button" aria-label="50 kcal less" @click="addKcal(-50)">−</button>
-            <input id="kcal" v-model="kcalText" inputmode="numeric" placeholder="Not logged" autocomplete="off" />
+            <input id="kcal" v-model="kcalText" inputmode="numeric" :placeholder="kcalPlaceholder" autocomplete="off" :aria-invalid="kcalError !== ''" @click="fillPlanned" />
             <button type="button" aria-label="50 kcal more" @click="addKcal(50)">+</button>
           </div>
           <div class="quick">
             <button v-for="n in [100, 250, 500]" :key="n" type="button" @click="addKcal(n)">+{{ n }}</button>
           </div>
-          <p class="left" data-test="kcal-hint">{{ kcalHint }}</p>
+          <p v-if="kcalError" class="invalid">{{ kcalError }}</p>
+          <p v-else class="left" data-test="kcal-hint">{{ kcalHint }}</p>
           <p class="after">{{ kcalAfter }}</p>
         </section>
 
@@ -70,9 +71,10 @@
             </div>
             <div class="stepper">
               <button type="button" :aria-label="`0.1 ${unit} less`" @click="stepKg(-0.1)">−</button>
-              <input id="kg" v-model="kgText" inputmode="decimal" :placeholder="lastWeightHint" autocomplete="off" @click="fillLastWeight" />
+              <input id="kg" v-model="kgText" inputmode="decimal" :placeholder="kgPlaceholder" autocomplete="off" :aria-invalid="kgError !== ''" @click="fillLastWeight" />
               <button type="button" :aria-label="`0.1 ${unit} more`" @click="stepKg(0.1)">+</button>
             </div>
+            <p v-if="kgError" class="invalid">{{ kgError }}</p>
           </section>
 
           <label class="cheat-row" for="cheat">
@@ -99,7 +101,7 @@
         </label>
         <div class="save-area">
           <span class="keys">Enter saves, Esc closes</span>
-          <button type="button" class="save" :class="{ danger: deleting }" :disabled="saving || loading" @click="save">
+          <button type="button" class="save" :class="{ danger: deleting }" :disabled="saving || !canSave" @click="save">
             {{ saving ? 'Saving…' : deleting ? 'Delete entry' : 'Save day' }}
           </button>
         </div>
@@ -109,28 +111,31 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import Modal from '../ui/Modal.vue'
 import ErrorNote from '../ui/ErrorNote.vue'
 import { useAppStore } from '../../stores/app'
 import { useLogSheetStore } from '../../stores/logSheet'
-import { useDayDataStore } from '../../stores/dayData'
+import { useLogWeeksStore } from '../../stores/logWeeks'
 import * as logApi from '../../api/dailyLog'
 import { addDays, mondayOf } from '../../utils/dates'
-import { relativeDay, weekdayShort } from '../../utils/format'
+import { CALENDAR_COLORS, relativeDay, shortDate, weekdayShort } from '../../utils/format'
 import { displayWeight, toKg } from '../../utils/units'
+import type { LogDay, LogWeek } from '../../types'
 
 const app = useAppStore()
 const sheet = useLogSheetStore()
-const store = useDayDataStore()
+const store = useLogWeeksStore()
 const unit = computed(() => app.unit)
 
 const date = ref(sheet.date ?? app.today)
-// Everything comes from the store's cache: the form is filled as soon as the day is ready.
-const ready = computed(() => store.isReady(date.value))
-const loading = computed(() => !ready.value)
+
+// What the form was filled from. Kept while it is edited: a refresh in the background (or on coming back to
+// the tab) makes the store reload, but never hides or overwrites what is being typed.
+const filled = ref<{ date: string; week: LogWeek; day: LogDay } | null>(null)
+const ready = computed(() => filled.value?.date === date.value)
+const day = computed(() => filled.value?.day ?? null)
 const loadError = computed(() => (ready.value ? '' : store.error ?? ''))
-const filledFor = ref<string | null>(null)
 const saveError = ref('')
 const saving = ref(false)
 
@@ -140,110 +145,154 @@ const cheat = ref(false)
 const note = ref('')
 const kcalBackup = ref('')   // what "Undo" brings back
 const kgBackup = ref('')
-const weekLogs = computed(() => store.weekLogs(mondayOf(date.value)))
-const lastWeight = computed(() => store.lastWeightBefore(date.value))
-const dayInfo = computed(() => store.dayInfo(date.value))
-const budget = computed(() => dayInfo.value?.planned ?? null)
-const target = computed(() => dayInfo.value?.target ?? null)
-const week = computed(() => {
-  // Today only: what is left of the week's budget for the other free days.
-  const b = store.dashboard?.budget
-  if (date.value !== app.today || !b) return null
-  const free = b.days.filter((d) => !d.userLogged)
-  return free.length > 1 ? { freeKcal: free.reduce((sum, d) => sum + d.kcal, 0), others: free.length - 1, todayBudget: b.todayBudget } : null
-})
-const savedCheat = ref(false)
 
-const kcalValue = computed<number | null>(() => {
-  const t = kcalText.value.trim()
-  if (t === '') return null
-  const n = Number(t)
-  return Number.isFinite(n) && n >= 0 ? Math.round(n) : null
-})
-const kgValue = computed<number | null>(() => {
-  const t = kgText.value.trim().replace(',', '.')
-  if (t === '') return null
-  const n = Number(t)
-  return Number.isFinite(n) && n > 0 ? toKg(n, unit.value) : null
-})
+const shownWeight = (kg: number | null | undefined) => (kg == null ? '' : displayWeight(kg, unit.value).toFixed(1))
+
+// ── What is typed ──────────────────────────────────────────────────────────
 
 const kcalEmpty = computed(() => kcalText.value.trim() === '')
 const kgEmpty = computed(() => kgText.value.trim() === '')
+
+const kcalValue = computed<number | null>(() => {
+  const n = Number(kcalText.value.trim())
+  return !kcalEmpty.value && Number.isFinite(n) && n >= 0 && n <= 30000 ? Math.round(n) : null
+})
+const kgValue = computed<number | null>(() => {
+  if (kgEmpty.value) return null
+  // Not edited: keep the stored value, which can be finer than what is shown (one decimal, or lbs).
+  if (day.value?.weightKg != null && kgText.value.trim() === shownWeight(day.value.weightKg)) return day.value.weightKg
+  const kg = toKg(Number(kgText.value.trim().replace(',', '.')), unit.value)
+  return Number.isFinite(kg) && kg >= 1 && kg <= 700 ? kg : null
+})
+// Something that is not a number must never be saved as "nothing".
+const kcalError = computed(() => (!kcalEmpty.value && kcalValue.value == null ? 'Enter a number from 0 to 30000.' : ''))
+const kgError = computed(() => (!kgEmpty.value && kgValue.value == null ? 'Enter a weight, like 83.8.' : ''))
+
+const hadKcal = computed(() => day.value?.calories != null)
+const hadKg = computed(() => day.value?.weightKg != null)
 const kcalUndo = computed(() => kcalEmpty.value && kcalBackup.value !== '')
 const kgUndo = computed(() => kgEmpty.value && kgBackup.value !== '')
 const kcalNothing = computed(() => kcalEmpty.value && !kcalUndo.value)
 const kgNothing = computed(() => kgEmpty.value && !kgUndo.value)
-const deleting = computed(() => kcalEmpty.value && kgEmpty.value)
+
+// Removing everything that was logged deletes the entry. A day with only a note or a cheat mark is a normal save.
+const deleting = computed(() => ready.value && kcalEmpty.value && kgEmpty.value && (hadKcal.value || hadKg.value))
+const canSave = computed(() => {
+  if (!ready.value || kcalError.value || kgError.value) return false
+  const d = day.value!
+  return !kcalEmpty.value || !kgEmpty.value || hadKcal.value || hadKg.value
+    || cheat.value !== d.isCheatDay || note.value.trim() !== (d.notes ?? '')
+})
+
+// ── Budget and hints ───────────────────────────────────────────────────────
 
 const whenLabel = computed(() => {
   const r = relativeDay(date.value, app.today)
-  return ['Today', 'Yesterday', 'Tomorrow'].includes(r) ? `${r}, ${dayLong(date.value)}` : r
+  return ['Today', 'Yesterday', 'Tomorrow'].includes(r) ? `${r}, ${weekdayShort(date.value)} ${shortDate(date.value)}` : r
 })
-function dayLong(d: string) {
-  const [, m, dd] = d.split('-')
-  return `${weekdayShort(d)} ${Number(dd)} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][Number(m) - 1]}`
-}
+
+const isToday = computed(() => date.value === app.today)
+/** What switching the cheat day changes: the TDEE instead of the target (the target itself without a TDEE). */
+const cheatExtra = computed(() => {
+  const d = day.value
+  return d?.calorieTarget == null ? 0 : (d.tdee ?? d.calorieTarget) - d.calorieTarget
+})
+const target = computed(() => (day.value?.calorieTarget == null ? null : day.value.calorieTarget + (cheat.value ? cheatExtra.value : 0)))
+/** How far the switch moves the day's target from what is stored. */
+const cheatChange = computed(() => (cheat.value ? cheatExtra.value : 0) - (day.value?.isCheatDay ? cheatExtra.value : 0))
+/** The day's budget, following the cheat day switch. A future day that is logged has a target, not a budget. */
+const budget = computed(() => {
+  const d = day.value
+  if (d?.planned == null || (hadKcal.value && !isToday.value)) return null
+  return Math.max(0, d.planned + cheatChange.value)
+})
+
+// Same rule as the server's budget: today counts as its full budget until it is exceeded, and what is left of
+// the pool is shared by the other free days.
+const restOfWeek = computed<number | null>(() => {
+  const w = filled.value?.week.thisWeek
+  if (!isToday.value || !w || w.otherDays === 0 || budget.value == null || day.value == null) return null
+  const eaten = kcalValue.value ?? 0
+  const today = eaten > budget.value ? eaten : w.todayBudget + cheatChange.value
+  return Math.max(0, Math.round((w.pool + cheatChange.value - today) / w.otherDays))
+})
 
 const kcalHint = computed(() => {
-  if (kcalEmpty.value) return 'Calories are removed when you save'
+  const limit = budget.value ?? target.value
+  if (kcalEmpty.value) {
+    if (hadKcal.value) return 'Calories are removed when you save'
+    return budget.value != null ? `Budget ${budget.value}` : ''
+  }
   if (kcalValue.value === 0) return '0 kcal, saved as a fasting day'
-  const ref_ = budget.value ?? target.value
-  if (kcalValue.value == null || ref_ == null) return ''
-  const gap = ref_ - kcalValue.value
-  return gap >= 0 ? `${gap} left of ${ref_}` : `${Math.abs(gap)} over ${ref_}`
+  if (kcalValue.value == null || limit == null) return ''
+  const gap = limit - kcalValue.value
+  return gap >= 0 ? `${gap} left of ${limit}` : `${-gap} over ${limit}`
 })
 const kcalAfter = computed(() => {
   if (deleting.value) return ''
-  const w = week.value
-  if (w && date.value === app.today && !kcalEmpty.value && kcalValue.value != null && w.others > 0) {
-    // Same rule as the server's budget: what eaten today leaves of the pool is shared by the other free days.
-    let pool = w.freeKcal
-    if (cheat.value !== savedCheat.value && app.settings.tdeeKcal && target.value != null) {
-      const diff = app.settings.tdeeKcal - target.value
-      pool += cheat.value ? diff : -diff
-    }
-    const plan = kcalValue.value <= w.todayBudget && cheat.value === savedCheat.value
-      ? Math.round((w.freeKcal - w.todayBudget) / w.others)
-      : Math.max(0, Math.round((pool - kcalValue.value) / w.others))
-    return `Rest of the week: ${plan} a day`
-  }
-  if (kcalEmpty.value && date.value >= app.today) return 'The day goes back to planned. Type 0 for a fasting day.'
+  if (!kcalEmpty.value) return restOfWeek.value != null ? `Rest of the week: ${restOfWeek.value} a day` : ''
+  if (day.value?.calorieTarget != null && date.value >= app.today)
+    return hadKcal.value ? `${isToday.value ? 'Today' : 'The day'} goes back to planned. Type 0 for a fasting day.` : 'Type 0 for a fasting day.'
   return ''
 })
 
-// The placeholder is the last weight itself, nothing else.
-const lastWeightHint = computed(() => (lastWeight.value == null ? 'Weight' : displayWeight(lastWeight.value, unit.value).toFixed(1)))
-const cheatHint = computed(() => (app.settings.tdeeKcal ? `Uses ${app.settings.tdeeKcal} kcal as today's target` : "Uses your TDEE as today's target"))
-const cheatHintShort = computed(() => (app.settings.tdeeKcal ? `uses ${app.settings.tdeeKcal} as the target` : 'uses your TDEE as the target'))
+const kcalPlaceholder = computed(() => (budget.value != null && !kcalUndo.value ? String(budget.value) : 'Not logged'))
+// The last weight itself, nothing else.
+const kgPlaceholder = computed(() => shownWeight(day.value?.lastWeightKg) || 'Weight')
+const cheatHint = computed(() => (day.value?.tdee ? `Uses ${day.value.tdee} kcal as ${isToday.value ? "today's" : "the day's"} target` : 'Uses your TDEE as the target'))
+const cheatHintShort = computed(() => (day.value?.tdee ? `uses ${day.value.tdee} as the target` : 'uses your TDEE as the target'))
 
 const weekDays = computed(() => {
   const monday = mondayOf(date.value)
+  const days = filled.value?.week.monday === monday ? filled.value.week.days : []
   return Array.from({ length: 7 }, (_, i) => {
     const d = addDays(monday, i)
-    const log = weekLogs.value.find((l) => l.date === d)
-    return { date: d, name: weekdayShort(d), kcal: log?.caloriesKcal != null ? String(log.caloriesKcal) : '–' }
+    const selected = d === date.value
+    const stored = days.find((x) => x.date === d)
+    const logged = selected ? kcalValue.value : stored?.calories ?? null
+    const plan = restOfWeek.value != null && d > date.value ? restOfWeek.value : selected ? budget.value : stored?.planned ?? null
+    const colors = !selected && stored?.status ? CALENDAR_COLORS.day[stored.status] : null
+    return {
+      date: d, name: `${weekdayShort(d)} ${Number(d.slice(8))}`,
+      kcal: String(logged ?? plan ?? '–'),
+      planned: !selected && logged == null && plan != null,
+      style: colors ? { background: colors[0], color: colors[1], borderColor: 'transparent' } : undefined,
+    }
   })
 })
 
+// ── Editing ────────────────────────────────────────────────────────────────
+
 function addKcal(n: number) {
-  const now = kcalValue.value ?? 0
-  kcalText.value = String(Math.max(0, now + n))
+  kcalText.value = String(Math.max(0, (kcalValue.value ?? 0) + n))
   kcalBackup.value = ''
 }
 
 function stepKg(delta: number) {
-  const base = kgText.value.trim() === '' ? (lastWeight.value != null ? displayWeight(lastWeight.value, unit.value) : 0) : Number(kgText.value.replace(',', '.'))
-  if (!Number.isFinite(base)) return
-  kgText.value = (Math.round((base + (kgText.value.trim() === '' && lastWeight.value != null ? 0 : delta)) * 10) / 10).toFixed(1)
+  // The first step starts from the last weight.
+  if (kgEmpty.value && kgPlaceholder.value !== 'Weight') kgText.value = kgPlaceholder.value
+  else {
+    const base = Number(kgText.value.replace(',', '.'))
+    if (!Number.isFinite(base)) return
+    kgText.value = Math.max(0, base + delta).toFixed(1)
+  }
   kgBackup.value = ''
 }
 
-// The last weight is only a placeholder. Clicking into an empty box fills it in as a starting point,
-// so saving a day without a weight never saves one by accident.
-function fillLastWeight() {
-  if (kgText.value.trim() === '' && lastWeight.value != null && kgBackup.value === '') {
-    kgText.value = displayWeight(lastWeight.value, unit.value).toFixed(1)
-  }
+// The plan and the last weight are only placeholders. Clicking into an empty box fills it in as a starting
+// point (selected, so typing replaces it); saving without touching it saves nothing.
+function fillPlanned(e: Event) {
+  if (!kcalEmpty.value || kcalBackup.value !== '' || budget.value == null) return
+  kcalText.value = String(budget.value)
+  selectAll(e)
+}
+function fillLastWeight(e: Event) {
+  if (!kgEmpty.value || kgBackup.value !== '' || day.value?.lastWeightKg == null) return
+  kgText.value = shownWeight(day.value.lastWeightKg)
+  selectAll(e)
+}
+function selectAll(e: Event) {
+  nextTick(() => (e.target as HTMLInputElement).select())
 }
 
 function toggleKcal() {
@@ -255,49 +304,69 @@ function toggleKg() {
   else { kgBackup.value = kgText.value; kgText.value = '' }
 }
 
+// ── Loading ────────────────────────────────────────────────────────────────
+
 function fill() {
-  const log = store.logOn(date.value)
+  const week = store.week(date.value)
+  const d = store.day(date.value)
+  if (!week || !d || ready.value) return
+  filled.value = { date: date.value, week, day: d }
   kcalBackup.value = ''
   kgBackup.value = ''
   saveError.value = ''
-  // Only what is really stored is shown. The last weight stays a placeholder.
-  kcalText.value = log?.caloriesKcal != null ? String(log.caloriesKcal) : ''
-  kgText.value = log?.weightKg != null ? displayWeight(log.weightKg, unit.value).toFixed(1) : ''
-  cheat.value = log?.isCheatDay ?? false
-  note.value = log?.notes ?? ''
-  savedCheat.value = log?.isCheatDay ?? false
-  // A day with no calories and no planned value starts at the day's target (when there is one).
-  if (log?.caloriesKcal == null && budget.value == null && target.value != null) kcalText.value = String(target.value)
-  filledFor.value = date.value
+  kgText.value = shownWeight(d.weightKg)
+  cheat.value = d.isCheatDay
+  note.value = d.notes ?? ''
+  // A day with no calories starts at its target, unless it has a plan: that one is the placeholder.
+  kcalText.value = d.calories != null ? String(d.calories) : budget.value == null && target.value != null ? String(target.value) : ''
+  focusCalories()
 }
 
-// Fill the form once per day, when its data is there. Background refreshes never overwrite what is typed.
-watch([ready, date], ([isReady, d]) => { if (isReady && filledFor.value !== d) fill() }, { immediate: true })
-watch(date, (d) => { store.prefetch(d) })
+async function focusCalories() {
+  // On a phone this would open the keyboard over the sheet.
+  if (!window.matchMedia?.('(min-width: 640px)').matches) return
+  await nextTick()
+  const inUse = document.activeElement?.closest('[role=dialog]') && document.activeElement.matches('input, textarea, button')
+  if (!inUse) document.getElementById('kcal')?.focus()
+}
+
+async function load() {
+  await store.load(date.value)
+  fill()
+  // Then the neighbours, so moving on is instant.
+  store.load(addDays(date.value, -7))
+  store.load(addDays(date.value, 7))
+}
+fill()      // the week is usually there already: the form is in the first render
+watch(() => store.week(date.value), fill)
+watch(date, () => { fill(); load() })
+// The week was dropped because something changed. Only needed if this day is not on screen yet.
+watch(() => app.version, () => { if (!ready.value) load() })
+onMounted(load)
 
 function go(days: number) { date.value = addDays(date.value, days) }
 function select(d: string) { date.value = d }
 
+// ── Saving ─────────────────────────────────────────────────────────────────
+
 async function save() {
-  if (saving.value) return
+  if (saving.value || !canSave.value) return
   saving.value = true
   saveError.value = ''
   try {
     if (deleting.value) {
-      // Both empty means "Delete entry": the whole day, note and cheat mark included.
-      if (store.logOn(date.value)) await logApi.deleteDay(date.value)
-      store.applySaved(date.value, null)
+      // Both removed means "Delete entry": the whole day, note and cheat mark included.
+      await logApi.deleteDay(date.value)
     } else {
-      const saved = await logApi.saveDay(date.value, {
+      await logApi.saveDay(date.value, {
         weightKg: kgValue.value,
         caloriesKcal: kcalValue.value,
         notes: note.value.trim() === '' ? null : note.value.trim(),
         isCheatDay: cheat.value,
       })
-      store.applySaved(date.value, saved)
     }
-    app.refresh()
     sheet.close()
+    app.refresh()
   } catch (e) {
     saveError.value = (e as Error).message
   } finally {
@@ -313,8 +382,6 @@ function onEnter(e: KeyboardEvent) {
 }
 
 function close() { sheet.close() }
-
-onMounted(() => { store.prefetch(date.value) })
 </script>
 
 <style scoped>
@@ -329,10 +396,13 @@ onMounted(() => { store.prefetch(date.value) })
 .day { min-height: 62px; border-radius: 8px; border: 1px solid #e5e7eb; background: #fff; color: #1f2937; font: inherit; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .day .dn { font-weight: 600; }
 .day .dk { font-size: 13px; }
+.day.plan { border: 1px dashed #6b7280; color: #4b5563; }
 .day[aria-pressed='true'] { background: #0369a1; border-color: #0369a1; color: #fff; }
 button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid #0284c7; outline-offset: 2px; }
 .cols { display: flex; flex-direction: column; gap: 12px; }
-.skel { border-radius: 8px; background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 37%, #f3f4f6 63%); background-size: 400% 100%; animation: shimmer 1.4s ease infinite; }
+.skel { border-radius: 8px; background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 37%, #f3f4f6 63%); background-size: 400% 100%; animation: appear 0.15s 0.12s both, shimmer 1.4s ease infinite; }
+/* Most loads take a few milliseconds: only show the placeholders when one is slower than that. */
+@keyframes appear { from { opacity: 0; } }
 .dk-skel { display: block; width: 28px; height: 12px; margin-top: 3px; }
 @keyframes shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
 @media (prefers-reduced-motion: reduce) { .skel { animation: none; } }
@@ -351,7 +421,8 @@ label { font-weight: 600; }
 .stepper input:focus { border: 2px solid #0369a1; outline: none; }
 .quick { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .quick button { height: 44px; border: 1px solid #d1d5db; border-radius: 8px; background: #f9fafb; font: inherit; font-weight: 600; color: #1f2937; }
-.left { margin: 0; font-weight: 600; }
+.left { margin: 0; font-weight: 600; min-height: 21px; }
+.invalid { margin: 0; font-weight: 600; color: #c70036; }
 .after { margin: 0; color: #4b5563; min-height: 21px; }
 .cheat-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; border-top: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb; padding: 6px 0; font-weight: 400; cursor: pointer; }
 .cheat-row strong { font-weight: 600; }

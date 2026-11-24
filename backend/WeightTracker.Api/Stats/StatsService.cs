@@ -118,7 +118,7 @@ public class StatsService(AppDbContext db) : IStatsService
                 ? Math.Round((double)activeGoal.TargetWeightKg / Math.Pow(settings.HeightCm.Value / 100.0, 2), 1) : null);
 
         return new DashboardStatsDto(
-            Fmt(today), c.Window, c.CalorieTarget(today), c.Tdee(today), budgetDto, week,
+            Fmt(today), c.Data.Days.Count > 0 ? Fmt(c.Data.Days.Keys.Min()) : null, c.Window, c.CalorieTarget(today), c.Tdee(today), budgetDto, week,
             new StreakDto(streak.Days, streak.NextGap, rows),
             new DeficitsDto(weekly, overall), weightDto,
             goalStatus,
@@ -228,7 +228,7 @@ public class StatsService(AppDbContext db) : IStatsService
 
         var others = budget?.Days.Keys.Count(d => d != today && !budget.UserLogged.Contains(d));
         return new LogWeekDto(Fmt(monday), days, budget is not null && monday == MondayOf(today)
-            ? new WeekPoolDto(budget.TodayBudget, Rnd(budget.Pool), others!.Value) : null);
+            ? new WeekPoolDto(budget.TodayExact, budget.Pool, others!.Value) : null);
     }
 
     // ── Average calories chart ───────────────────────────────────────────────

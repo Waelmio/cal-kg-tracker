@@ -41,7 +41,7 @@
           <div class="big" :style="{ color: f.deficitKcal >= 0 ? UNDER : OVER }">{{ kcal(Math.abs(f.deficitKcal)) }} <span class="unit">kcal {{ f.deficitKcal >= 0 ? 'below' : 'above' }} TDEE</span></div>
           <TileRow>
             <template #label><InfoTip label="Worth about" text="7700 kcal is about 1 kg." /></template>
-            {{ Math.abs(f.deficitKg).toFixed(2) }} kg {{ f.deficitKg >= 0 ? 'lost' : 'gained' }}
+            {{ toUnit(Math.abs(f.deficitKg), app.unit).toFixed(2) }} {{ app.unit }} {{ f.deficitKg >= 0 ? 'lost' : 'gained' }}
           </TileRow>
           <TileRow label="Against target">
             <span :style="{ color: f.gap > 0 ? OVER : UNDER }">{{ Math.abs(f.gap) }} {{ f.gap > 0 ? 'over' : 'under' }}</span>
@@ -70,7 +70,7 @@
           <li><i :style="{ background: STATUS_COLORS.under.solid }" />On or under target</li>
           <li><i :style="{ background: STATUS_COLORS.balanced.solid }" />Over, {{ app.settings.averagingWeeks }}-week average ok</li>
           <li><i :style="{ background: STATUS_COLORS.over.solid }" />Over target</li>
-          <li><i class="t" />Target</li>
+          <li><i class="tl" />Target</li>
         </ul>
       </section>
 
@@ -95,7 +95,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, toRef } from 'vue'
 import Modal from '../ui/Modal.vue'
 import ErrorNote from '../ui/ErrorNote.vue'
 import InfoTip from '../ui/InfoTip.vue'
@@ -103,9 +103,9 @@ import TileRow from '../ui/TileRow.vue'
 import { useAppStore } from '../../stores/app'
 import { useAsyncData } from '../../composables/useAsyncData'
 import * as statsApi from '../../api/stats'
+import { toUnit } from '../../utils/units'
 import { addMonths, lastDayOfMonth, monthOf } from '../../utils/dates'
 import { kcal, monthTitle, shortDate, signed, STATUS_COLORS, weight, weightChange } from '../../utils/format'
-import { computed as c2, toRef } from 'vue'
 
 const props = defineProps<{ month: string }>()
 defineEmits<{ close: []; change: [month: string] }>()
@@ -126,7 +126,7 @@ const { data, loading, error, reload } = useAsyncData(async () => {
   return { ...summary, calendarDays: calendar.days }
 }, [monthRef])
 
-const f = c2(() => data.value!.figures)
+const f = computed(() => data.value!.figures)
 
 const days = computed(() => {
   const list = data.value?.calendarDays ?? []
@@ -139,8 +139,6 @@ const days = computed(() => {
     tip: d.calories == null ? `${d.date}: not logged` : `${d.date}: ${d.calories} kcal, target ${d.target ?? '–'}`,
   }))
 })
-
-void monthOf
 </script>
 
 <style scoped>
@@ -171,7 +169,7 @@ h2 { margin: 0; font-size: 13px; font-weight: 600; color: #4b5563; }
 .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13px; color: #4b5563; list-style: none; margin: 0; padding: 0; }
 .legend li { display: inline-flex; align-items: center; gap: 6px; }
 .legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
-.legend i.t { width: 14px; height: 2px; border-radius: 0; background: #1f2937; }
+.legend i.tl { width: 14px; height: 2px; border-radius: 0; background: #1f2937; }
 table { width: 100%; min-width: 560px; border-collapse: collapse; text-align: right; }
 th { padding: 8px 0; font-weight: 600; font-size: 13px; color: #4b5563; }
 td { padding: 9px 0; border-top: 1px solid #e5e7eb; }

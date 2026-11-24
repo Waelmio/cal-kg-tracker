@@ -2,9 +2,6 @@ import client from './client'
 import { localToday } from '../utils/dates'
 import type { DailyLog, SaveDayRequest } from '../types'
 
-export const getAll = (params?: { from?: string; to?: string; limit?: number }) =>
-  client.get<DailyLog[]>('/daily-logs', { params }).then((r) => r.data)
-
 /** Full replace of the day. Resolves to null when nothing is left and the day was removed. */
 export const saveDay = (date: string, data: SaveDayRequest) =>
   client

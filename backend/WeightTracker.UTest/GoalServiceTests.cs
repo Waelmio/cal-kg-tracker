@@ -190,6 +190,20 @@ public class GoalServiceTests
     }
 
     [Fact]
+    public async Task Create_AfterReachingTheGoal_RecordsItAsReached()
+    {
+        using var db = CreateDb();
+        Weigh(db, "2026-11-23", 77.6m);
+        await db.SaveChangesAsync();
+        var service = Service(db);
+        var first = await service.CreateAsync(new CreateGoalDto(78, new DateOnly(2027, 1, 1), null, null, 88m), Today.AddDays(-5));
+
+        await service.CreateAsync(new CreateGoalDto(75, new DateOnly(2027, 6, 1), null, null), Today);
+
+        Assert.Equal(GoalEndReason.Reached, (await service.GetAllAsync()).Single(g => g.Id == first.Id).EndReason);
+    }
+
+    [Fact]
     public async Task GetAll_GivesTheWeightChangeOfEndedGoals()
     {
         using var db = CreateDb();

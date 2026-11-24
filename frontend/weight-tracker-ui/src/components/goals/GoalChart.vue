@@ -12,7 +12,8 @@
         <circle :cx="g.current.x" :cy="g.current.y" r="5" fill="#0284c7" stroke="#fff" stroke-width="2" />
         <text :x="g.current.x + 9" :y="g.current.y - 8" fill="#1f2937" font-weight="600">{{ tick(g.current.kg) }}</text>
       </template>
-      <text :x="g.width - 74" :y="g.y(goal.targetWeightKg) + 4" fill="#1f2937">{{ tick(goal.targetWeightKg) }} goal</text>
+      <text v-if="paceLabelY != null" :x="g.width - 86" :y="paceLabelY + 4" fill="#1f2937">{{ tick(g.projectionEnd!.kg) }} at pace</text>
+      <text :x="g.width - 86" :y="g.y(toUnit(goal.targetWeightKg, unit)) + 4" fill="#1f2937">{{ tick(toUnit(goal.targetWeightKg, unit)) }} goal</text>
     </svg>
     <ul class="legend">
       <li><i class="dot" />Weigh-in</li>
@@ -26,31 +27,39 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { buildGoalChart } from '../../utils/chart'
-import { addDays } from '../../utils/dates'
 import { shortDate } from '../../utils/format'
-import { displayWeight } from '../../utils/units'
+import { toUnit } from '../../utils/units'
 import type { DashboardStats, GoalStatus, WeightUnit } from '../../types'
 
 const props = defineProps<{ goal: GoalStatus; series: DashboardStats['weightSeries']; today: string; unit: WeightUnit }>()
 
 const g = computed(() => {
   const goal = props.goal
-  const target = goal.targetDate ?? addDays(props.today, 90)
-  const end = goal.projectedDate && goal.projectedDate > target ? goal.projectedDate : target
+  const u = (kg: number) => toUnit(kg, props.unit)
   return buildGoalChart({
-    series: props.series.map((p) => ({ ...p, kg: displayWeight(p.kg, props.unit), avg7: displayWeight(p.avg7, props.unit) })),
+    series: props.series.map((p) => ({ date: p.date, kg: u(p.kg), avg7: u(p.avg7) })),
     today: props.today,
     start: goal.startDate,
-    end,
-    targetKg: displayWeight(goal.targetWeightKg, props.unit),
-    startKg: goal.startingWeightKg == null ? null : displayWeight(goal.startingWeightKg, props.unit),
-    projection: goal.projectedDate ? { date: goal.projectedDate, kg: displayWeight(goal.targetWeightKg, props.unit) } : null,
+    end: goal.targetDate && goal.targetDate > props.today ? goal.targetDate : props.today,
+    targetKg: u(goal.targetWeightKg),
+    targetDate: goal.targetDate,
+    startKg: goal.startingWeightKg == null ? null : u(goal.startingWeightKg),
+    currentKg: goal.currentKg == null ? null : u(goal.currentKg),
+    pacePerDay: goal.paceKgPerWeek == null ? null : u(goal.paceKgPerWeek) / 7,
   })
 })
 
-const gridPath = computed(() => g.value.yTicks.map((t) => `M44 ${t.y}H${g.value.width - 80}`).join(''))
+// The two labels at the right edge must not sit on top of each other.
+const paceLabelY = computed(() => {
+  const end = g.value.projectionEnd
+  if (!end || end.reached) return null
+  const goalY = g.value.y(toUnit(props.goal.targetWeightKg, props.unit))
+  return Math.abs(end.y - goalY) < 14 ? goalY + (end.y <= goalY ? -14 : 14) : end.y
+})
+
+const gridPath = computed(() => g.value.yTicks.map((t) => `M44 ${t.y}H${g.value.width - 92}`).join(''))
 const tick = (v: number) => String(Math.round(v * 10) / 10)
-const label = computed(() => `Weight since ${shortDate(props.goal.startDate)} with the goal line${props.goal.projectedDate ? ' and the projection' : ''}`)
+const label = computed(() => `Weight since ${shortDate(props.goal.startDate)} with the goal line${g.value.projection ? ' and the current pace' : ''}`)
 </script>
 
 <style scoped>

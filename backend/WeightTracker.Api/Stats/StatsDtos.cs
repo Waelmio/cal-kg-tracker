@@ -51,6 +51,7 @@ public record WeightDto(
 
 public record DashboardStatsDto(
     string Today,
+    string? FirstLog,        // the oldest day with anything logged
     int AveragingWeeks,
     int? CalorieTarget,
     int? Tdee,
@@ -106,8 +107,8 @@ public record LogDayDto(
     double? LastWeightKg);
 
 /// <summary>What today's free days share, so the sheet can show the effect of a value while it is typed.</summary>
-/// <param name="Pool">Kcal left for today and the other free days of this week.</param>
-public record WeekPoolDto(int TodayBudget, int Pool, int OtherDays);
+/// <param name="Pool">Kcal left for today and the other free days of this week. Not rounded, like the budget: the shares are.</param>
+public record WeekPoolDto(double TodayBudget, double Pool, int OtherDays);
 
 public record LogWeekDto(string Monday, List<LogDayDto> Days, WeekPoolDto? ThisWeek);
 

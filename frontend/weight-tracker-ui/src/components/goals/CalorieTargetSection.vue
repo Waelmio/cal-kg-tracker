@@ -35,7 +35,7 @@ import { shortDate, weightChange } from '../../utils/format'
 import type { CalorieGoal, DashboardStats } from '../../types'
 
 const props = defineProps<{ current: number | null; goals: CalorieGoal[]; comparison?: DashboardStats['targetComparison'] | null }>()
-const emit = defineEmits<{ changed: []; 'turn-off': [] }>()
+defineEmits<{ 'turn-off': [] }>()
 
 const app = useAppStore()
 const input = ref('')
@@ -69,7 +69,6 @@ async function set() {
     await api.create(Number(input.value.trim()))
     input.value = ''
     app.refresh()
-    emit('changed')
   } catch (e) {
     error.value = (e as Error).message
   } finally {

@@ -14,17 +14,17 @@
 
     <ErrorNote v-if="error" :message="error" :retry="reload" />
 
-    <div class="grid" role="grid" :aria-busy="loading">
-      <div v-for="h in ['Week avg', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']" :key="h" class="h" role="columnheader">{{ h }}</div>
+    <div class="grid" :aria-busy="loading">
+      <div v-for="h in ['Week avg', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']" :key="h" class="h">{{ h }}</div>
 
       <template v-for="w in rows" :key="w.monday">
-        <div class="cell wk" role="gridcell" :style="w.style" :title="w.title">
+        <div class="cell wk" :style="w.style" :title="w.title">
           <span class="top">{{ w.top }}</span>
           <span class="mid">{{ w.avg }}</span>
           <span class="sub">{{ w.weightText }}</span>
         </div>
         <button
-          v-for="d in w.days" :key="d.date" type="button" class="cell day" role="gridcell"
+          v-for="d in w.days" :key="d.date" type="button" class="cell day"
           :style="d.style" :title="d.title" :aria-label="d.label" @click="sheet.open(d.date)"
         >
           <span class="top" :style="{ fontSize: d.inMonth ? '14px' : '12px' }">{{ d.top }}</span>
@@ -52,7 +52,7 @@ import { useAppStore } from '../../stores/app'
 import { useLogSheetStore } from '../../stores/logSheet'
 import { useAsyncData } from '../../composables/useAsyncData'
 import * as statsApi from '../../api/stats'
-import { addDays, addMonths, lastDayOfMonth, mondayOf, monthOf } from '../../utils/dates'
+import { addDays, addMonths, isoWeek, mondayOf, monthOf } from '../../utils/dates'
 import { CALENDAR_COLORS, kcal, longDate, monthTitle, STATUS_COLORS, statusText, weight, weightChange } from '../../utils/format'
 import type { CalendarDay, CalendarWeek } from '../../types'
 
@@ -64,8 +64,8 @@ const month = ref(monthOf(app.today))
 
 const range = computed(() => {
   const from = mondayOf(`${month.value}-01`)
-  const to = addDays(mondayOf(lastDayOfMonth(month.value)), 6)
-  return { from, to }
+  // Always six weeks, so the page doesn't jump from month to month and the planned weeks stay in view.
+  return { from, to: addDays(from, 41) }
 })
 
 const { data, loading, error, reload } = useAsyncData(() => statsApi.getCalendar(range.value.from, range.value.to), [month])
@@ -111,27 +111,27 @@ const rows = computed(() => {
       const n = Number(date.slice(8))
       const isToday = date === app.today
       const logged = d?.calories != null
-      const mid = logged ? kcal(d!.calories) : isToday ? '' : d?.planned != null ? kcal(d.planned) : date < app.today ? 'no log' : ''
+      const past = d != null && date < app.today      // nothing is said about a day that is still loading
       return {
         date, inMonth,
         // Days of the neighbouring months carry their month: "26 Oct".
         top: inMonth ? String(n) : `${n} ${MONTHS[Number(date.slice(5, 7)) - 1]}`,
-        mid: isToday && !logged ? (d?.planned != null ? kcal(d.planned) : '') : mid,
+        mid: logged ? kcal(d!.calories) : d?.planned != null ? kcal(d.planned) : past ? 'no log' : '',
         sub: isToday ? 'today' : d?.isCheatDay ? 'cheat' : '',
         style: dayStyle(date, d),
-        title: d?.target != null ? `Target ${d.target} kcal${d.planned != null && !logged ? ', planned from your budget' : ''}` : '',
+        title: [d?.target != null ? `Target ${d.target} kcal` : '', d?.planned != null && !logged ? 'Planned from your budget' : '', d?.notes ?? ''].filter(Boolean).join('\n'),
         label: [
           longDate(date),
           logged ? `${d!.calories} kcal, ${statusText(d!.status ?? null).toLowerCase()}` : d?.planned != null ? `planned ${d.planned} kcal` : 'not logged',
           d?.weightKg != null ? weight(d.weightKg, app.unit, true) : '',
           d?.isCheatDay ? 'cheat day' : '',
-          d?.hasNote ? 'has a note' : '',
+          d?.notes ? `note: ${d.notes}` : '',
         ].filter(Boolean).join(', '),
       }
     })
     out.push({
       monday,
-      top: `W${w?.isoWeek ?? 0}${addDays(monday, 6) >= app.today && monday <= app.today ? ' so far' : ''}`,
+      top: `W${isoWeek(monday)}${addDays(monday, 6) >= app.today && monday <= app.today ? ' so far' : ''}`,
       avg: f?.avgCalories == null ? '' : kcal(f.avgCalories),
       weightText: f?.avgWeightKg == null ? '' : `${weight(f.avgWeightKg, app.unit)}${f.weightChangeKg != null ? ' ' + weightChange(f.weightChangeKg, app.unit) : ''}`,
       title: f?.avgCalories == null ? 'Nothing logged' : 'Average calories, average weight and its change from the previous week',

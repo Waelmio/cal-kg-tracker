@@ -8,7 +8,7 @@ const base = {
     { date: '2026-10-10', kg: 87, avg7: 87.2 },
     { date: '2026-11-24', kg: 84, avg7: 84.1 },
   ],
-  projection: { date: '2027-03-07', kg: 78 },
+  currentKg: 84.1, pacePerDay: -0.41 / 7,
 }
 
 describe('buildGoalChart', () => {
@@ -24,21 +24,41 @@ describe('buildGoalChart', () => {
     expect(g.y(88)).toBeLessThan(g.y(80))
   })
 
-  it('has one dot per weigh-in, a trend line, a goal line at the target and a dashed projection', () => {
+  it('has one dot per weigh-in, a trend line and a goal line from the starting weight to the target', () => {
     const g = buildGoalChart(base)
+    const f = (n: number) => String(Math.round(n * 10) / 10)
     expect(g.dots).toHaveLength(3)
     expect(g.trend.startsWith('M')).toBe(true)
-    expect(g.goalLine).toContain(`${g.y(78).toFixed(1)}`.replace(/\.0$/, ''))
-    expect(g.projection.startsWith('M')).toBe(true)
+    expect(g.goalLine).toBe(`M${f(g.x('2026-09-10'))} ${f(g.y(88.6))}L${f(g.x('2027-02-12'))} ${f(g.y(78))}`)
     expect(g.current?.kg).toBeCloseTo(84.1)
   })
 
-  it('has no projection when the pace goes the wrong way', () => {
-    expect(buildGoalChart({ ...base, projection: null }).projection).toBe('')
+  it('projects to the end of the axis, and says what weight that is', () => {
+    const g = buildGoalChart(base)
+    expect(g.projection.startsWith('M')).toBe(true)
+    expect(g.projectionEnd).toMatchObject({ reached: false, x: Math.round(g.x('2027-02-12') * 10) / 10 })
+    expect(g.projectionEnd!.kg).toBeCloseTo(84.1 - (0.41 / 7) * 80, 5)
+  })
+
+  it('stops the projection where it meets the target', () => {
+    const g = buildGoalChart({ ...base, pacePerDay: -0.2 })
+    expect(g.projectionEnd).toMatchObject({ reached: true, kg: 78 })
+    expect(g.projectionEnd!.x).toBeLessThan(g.x('2027-02-12'))
+  })
+
+  it('ends the average line at the weight shown on the tile, even without a weigh-in today', () => {
+    const g = buildGoalChart({ ...base, series: base.series.slice(0, 2), currentKg: 85 })
+    expect(g.current).toEqual({ x: Math.round(g.x('2026-11-24') * 10) / 10, y: Math.round(g.y(85) * 10) / 10, kg: 85 })
+    expect(g.trend.endsWith(`L${g.current!.x} ${g.current!.y}`)).toBe(true)
+  })
+
+  it('has no projection without a pace, and shows a pace going the wrong way as it is', () => {
+    expect(buildGoalChart({ ...base, pacePerDay: null }).projection).toBe('')
+    expect(buildGoalChart({ ...base, pacePerDay: 0.02 }).projectionEnd!.kg).toBeGreaterThan(84.1)
   })
 
   it('works with no weigh-ins at all', () => {
-    const g = buildGoalChart({ ...base, series: [], projection: null })
+    const g = buildGoalChart({ ...base, series: [], currentKg: null, pacePerDay: null })
     expect(g.dots).toEqual([])
     expect(g.current).toBeNull()
   })

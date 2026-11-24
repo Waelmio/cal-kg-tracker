@@ -7,7 +7,7 @@
         <div class="big" :style="{ color: over ? OVER : undefined }">{{ kcal(Math.abs(s.budget.todayLeft ?? s.budget.todayBudget)) }} <span class="unit">{{ over ? 'kcal over' : 'kcal left' }}</span></div>
       </template>
       <template v-if="s.budget" #sub>
-        <div class="bar" role="img" :aria-label="`${pct}% of today's budget eaten`"><div :style="{ width: pct + '%', background: over ? OVER_BG : UNDER_BG }" /></div>
+        <div class="bar" role="img" :aria-label="`${pct}% of today's budget eaten`"><div :style="{ width: pct + '%', background: over ? OVER : UNDER }" /></div>
       </template>
       <template v-if="s.budget">
         <TileRow label="Eaten" :value="s.budget.eatenToday == null ? '–' : kcal(s.budget.eatenToday)" />
@@ -21,7 +21,7 @@
     <!-- Budget this week -->
     <Tile title="Budget this week">
       <template v-if="s.budget" #value><div class="big">{{ kcal(s.budget.todayBudget) }} <span class="unit">kcal a day</span></div></template>
-      <template #sub><p class="tile-sub">{{ s.budget ? `Keeps your ${s.averagingWeeks}-week average at ${kcal(s.calorieTarget)}` : 'No calorie target' }}</p></template>
+      <template #sub><p class="tile-sub">{{ !s.budget ? 'No calorie target' : s.budget.reachesTarget ? `Keeps your ${averageName} at ${kcal(s.calorieTarget)}` : `Too far over to average ${kcal(s.calorieTarget)} this week` }}</p></template>
       <template v-if="s.budget">
         <TileRow>
           <template #label><InfoTip label="Average so far" text="Logged days this week. Today isn't counted yet." /></template>
@@ -75,7 +75,7 @@
       <template v-if="s.deficits.weekly.loggedDays > 0">
         <TileRow>
           <template #label><InfoTip label="Worth about" text="7700 kcal is about 1 kg." /></template>
-          {{ Math.abs(s.deficits.weekly.kg).toFixed(2) }} kg {{ s.deficits.weekly.kg >= 0 ? 'lost' : 'gained' }}
+          {{ toUnit(Math.abs(s.deficits.weekly.kg), unit).toFixed(2) }} {{ unit }} {{ s.deficits.weekly.kg >= 0 ? 'lost' : 'gained' }}
         </TileRow>
         <TileRow v-if="s.deficits.weekly.expectedKcal != null">
           <template #label><InfoTip label="Expected by end of this week" text="If you eat your budget every day." /></template>
@@ -94,12 +94,12 @@
         <div class="big" :style="{ color: o.kcal >= 0 ? UNDER : OVER }">{{ kcal(Math.abs(o.kcal)) }} <span class="unit">{{ o.kcal >= 0 ? 'kcal below TDEE' : 'kcal above TDEE' }}</span></div>
       </template>
       <template #sub>
-        <p class="tile-sub">{{ o.loggedDays === 0 ? `No logged days ${o.sinceGoalStart ? 'since the goal started' : 'in the last four full weeks'}` : o.sinceGoalStart ? `${o.loggedDays} / ${o.totalDays} days logged since ${shortDate(o.since, o.since.slice(0, 4) !== s.today.slice(0, 4))}` : `${o.loggedDays} / ${o.totalDays} days logged in the last four full weeks` }}</p>
+        <p class="tile-sub">{{ o.loggedDays === 0 ? `No logged days ${o.sinceGoalStart ? 'since the goal started' : 'in the last four full weeks'}` : o.sinceGoalStart ? `${o.loggedDays} / ${o.totalDays} days logged since ${shortDate(o.since, o.since.slice(0, 4) !== s.today.slice(0, 4))}` : `${o.loggedDays} / ${o.totalDays} days logged, last four full weeks` }}</p>
       </template>
       <template v-if="o.loggedDays > 0">
         <TileRow>
           <template #label><InfoTip label="Worth about" text="7700 kcal is about 1 kg." /></template>
-          {{ Math.abs(o.kg).toFixed(2) }} kg {{ o.kg >= 0 ? 'lost' : 'gained' }}
+          {{ toUnit(Math.abs(o.kg), unit).toFixed(2) }} {{ unit }} {{ o.kg >= 0 ? 'lost' : 'gained' }}
         </TileRow>
         <TileRow>
           <template #label><InfoTip label="Against target" text="Compared with your calorie target." /></template>
@@ -116,6 +116,7 @@ import Tile from '../ui/Tile.vue'
 import TileRow from '../ui/TileRow.vue'
 import InfoTip from '../ui/InfoTip.vue'
 import { kcal, shortDate, signed, weight, weightChange } from '../../utils/format'
+import { toUnit } from '../../utils/units'
 import type { DashboardStats, WeightUnit } from '../../types'
 
 const props = defineProps<{ stats: DashboardStats; unit: WeightUnit }>()
@@ -125,13 +126,13 @@ const o = computed(() => props.stats.deficits.overall)
 // The same emerald and red the previous dashboard used for good and bad values.
 const UNDER = '#10b981'
 const OVER = '#ef4444'
-const UNDER_BG = '#10b981'
-const OVER_BG = '#ef4444'
+const averageName = computed(() => (s.value.averagingWeeks === 1 ? 'week average' : `${s.value.averagingWeeks}-week average`))
 
 const over = computed(() => (s.value.budget?.todayLeft ?? 0) < 0)
 const pct = computed(() => {
   const b = s.value.budget
-  if (!b || b.eatenToday == null || b.todayBudget <= 0) return 0
+  if (!b || b.eatenToday == null) return 0
+  if (b.todayBudget <= 0) return b.eatenToday > 0 ? 100 : 0
   return Math.min(100, Math.round((b.eatenToday / b.todayBudget) * 100))
 })
 const avgColor = computed(() => {
@@ -142,9 +143,8 @@ const avgColor = computed(() => {
 const paceColor = computed(() => {
   const g = s.value.goal
   const p = s.value.weight.paceKgPerWeek
-  if (!g || p == null || g.currentKg == null) return undefined
-  const losing = g.currentKg > g.targetWeightKg
-  return (losing ? p < 0 : p > 0) ? UNDER : OVER
+  if (!g || p == null || g.kind !== 'Reach') return undefined
+  return (g.losing ? p < 0 : p > 0) ? UNDER : OVER
 })
 </script>
 
@@ -157,6 +157,6 @@ const paceColor = computed(() => {
 .muted { color: #4b5563; }
 .bar { height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; margin: 4px 0 6px; }
 .bar > div { height: 8px; }
-.srow { display: grid; grid-template-columns: minmax(0, 1fr) 56px 64px; gap: 8px; align-items: baseline; font-size: 14px; line-height: 1.3; min-height: 18px; }
+.srow { display: grid; grid-template-columns: minmax(0, 1fr) 56px 64px; gap: 8px; align-items: baseline; font-size: 14px; line-height: 1.3; min-height: 22px; }
 .r { text-align: right; }
 </style>

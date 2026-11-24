@@ -1,5 +1,5 @@
 import type { Status, WeightUnit } from '../types'
-import { displayWeight } from './units'
+import { displayWeight, toUnit } from './units'
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
@@ -61,10 +61,13 @@ export const weight = (kg: number | null | undefined, unit: WeightUnit, withUnit
 /** Weight change with the triangle used only for weight: ▲ up, ▼ down. */
 export const weightChange = (deltaKg: number | null | undefined, unit: WeightUnit, digits = 1): string => {
   if (deltaKg == null) return ''
-  const v = Math.abs(displayWeight(deltaKg, unit))
+  const v = Math.abs(toUnit(deltaKg, unit))
   if (Number(v.toFixed(digits)) === 0) return `0.${'0'.repeat(digits)}`
   return `${deltaKg > 0 ? '▲' : '▼'} ${v.toFixed(digits)}`
 }
+
+/** A weight amount without needless decimals: "78", "0.41". */
+export const amount = (kg: number, unit: WeightUnit): string => String(Math.round(toUnit(kg, unit) * 100) / 100)
 
 /** "+25", "−30", "0". Uses a real minus sign. */
 export const signed = (n: number): string => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : '0')

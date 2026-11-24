@@ -1,6 +1,6 @@
 import client from './client'
 import { localToday } from '../utils/dates'
-import type { Calendar, DashboardStats, MonthSummary, Period, TdeeStats } from '../types'
+import type { Calendar, DashboardStats, LogWeek, MonthSummary, Period, TdeeStats } from '../types'
 
 const today = () => localToday()
 
@@ -9,6 +9,10 @@ export const getDashboard = () =>
 
 export const getCalendar = (from: string, to: string) =>
   client.get<Calendar>('/stats/calendar', { params: { from, to, today: today() } }).then((r) => r.data)
+
+/** The week around a date, with everything the log sheet shows and edits. */
+export const getLogWeek = (date: string) =>
+  client.get<LogWeek>('/stats/log-week', { params: { date, today: today() } }).then((r) => r.data)
 
 export const getPeriods = (unit: 'week' | 'month', count: number) =>
   client.get<Period[]>('/stats/periods', { params: { unit, count, today: today() } }).then((r) => r.data)

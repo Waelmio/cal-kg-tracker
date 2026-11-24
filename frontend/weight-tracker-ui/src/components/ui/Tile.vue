@@ -21,9 +21,10 @@
 </template>
 
 <script setup lang="ts">
-let counter = 0
+import { useId } from 'vue'
+
 defineProps<{ title?: string; value?: string | number | null; unit?: string; sub?: string; color?: string; loading?: boolean }>()
-const id = `tile-${++counter}`
+const id = useId()
 </script>
 
 <style scoped>

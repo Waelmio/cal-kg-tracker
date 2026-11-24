@@ -5,12 +5,13 @@ export function errorMessage(err: any): string {
   const data = err?.response?.data
   if (typeof data === 'string' && data.trim()) return data
   if (data && typeof data === 'object') {
-    if (typeof data.title === 'string' && data.title) return data.title
-    if (typeof data.detail === 'string' && data.detail) return data.detail
+    // Validation errors first: their title is only "One or more validation errors occurred."
     if (data.errors && typeof data.errors === 'object') {
       const first = Object.values(data.errors).flat()[0]
       if (typeof first === 'string') return first
     }
+    if (typeof data.title === 'string' && data.title) return data.title
+    if (typeof data.detail === 'string' && data.detail) return data.detail
   }
   return err?.message || 'Unknown error'
 }

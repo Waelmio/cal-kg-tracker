@@ -11,6 +11,22 @@
     </form>
     <p v-if="actionError" role="alert" class="error">{{ actionError }}</p>
 
+    <div v-if="history.length" class="hist">
+      <div v-for="h in history" :key="h.id">
+        <span>{{ h.range }}</span><strong>{{ h.kcal }}</strong>
+        <button type="button" class="rm" :disabled="busy" :aria-label="`Remove ${h.kcal}, ${h.range}`" @click="removing = h">Remove</button>
+      </div>
+    </div>
+    <Modal v-if="removing" title="Remove this TDEE?" max-width="440px" @close="removing = null">
+      <p>{{ removing.kcal }}, {{ removing.range.toLowerCase() }}. Its days use the value before it{{ history.length === 1 ? ', and there is none: their deficits disappear until you set a TDEE again' : '' }}.</p>
+      <template #footer>
+        <div class="dlg-row">
+          <button type="button" class="plain" @click="removing = null">Cancel</button>
+          <button type="button" class="danger" @click="remove">Remove</button>
+        </div>
+      </template>
+    </Modal>
+
     <div class="box">
       <div class="est-head"><span class="b">Estimated from your logs</span><span class="est">{{ data?.estimate?.kcal ?? '' }}</span></div>
       <div class="periods">
@@ -34,7 +50,7 @@
     <div v-if="data?.diet" class="diet">
       <h3>What the diet changed, about</h3>
       <div v-for="r in data.diet.rows" :key="r.key" class="r" :class="{ line: r.key === 'now' }">
-        <InfoTip :text="dietTip(r.key, r.label)"><span :class="{ strong: ['before', 'now', 'keep'].includes(r.key) }">{{ r.label }}</span></InfoTip>
+        <InfoTip :text="dietTip(r.key, r.label)"><span :class="{ strong: ['before', 'now', 'keep'].includes(r.key) }">{{ dietLabel(r.key, r.label) }}</span></InfoTip>
         <span :class="{ strong: ['before', 'now'].includes(r.key), keep: r.key === 'keep' }">{{ r.kcal < 0 ? '−' + Math.abs(r.kcal) : r.kcal }}</span>
       </div>
       <p class="hint">{{ data.diet.footer }}</p>
@@ -46,20 +62,33 @@
 import { computed, ref } from 'vue'
 import ErrorNote from '../ui/ErrorNote.vue'
 import InfoTip from '../ui/InfoTip.vue'
+import Modal from '../ui/Modal.vue'
 import { useAppStore } from '../../stores/app'
 import { useAsyncData } from '../../composables/useAsyncData'
 import * as statsApi from '../../api/stats'
 import * as tdeeApi from '../../api/tdee'
-import { shortDate } from '../../utils/format'
+import { addDays } from '../../utils/dates'
+import { shortDate, weight } from '../../utils/format'
+import type { TdeeEntry } from '../../types'
 
-defineProps<{ current: number | null }>()
-const emit = defineEmits<{ changed: [] }>()
+const props = defineProps<{ current: number | null; entries: TdeeEntry[] }>()
 
 const app = useAppStore()
 const days = ref<30 | 60 | 90>(90)
 const handInput = ref('')
 const busy = ref(false)
 const actionError = ref('')
+
+// "Since 15 Oct 2026" for the value in force, "1 Jun to 14 Oct 2026" for earlier ones.
+const history = computed(() => {
+  const sorted = [...props.entries].sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))
+  return sorted.map((e, i) => ({
+    id: e.id,
+    kcal: e.kcal,
+    range: i === 0 ? `Since ${shortDate(e.effectiveFrom, true)}` : `${shortDate(e.effectiveFrom)} to ${shortDate(addDays(sorted[i - 1].effectiveFrom, -1), true)}`,
+  }))
+})
+const removing = ref<{ id: number; kcal: number; range: string } | null>(null)
 
 const { data, loading, error, reload } = useAsyncData(() => statsApi.getTdee(days.value), [days])
 
@@ -88,19 +117,30 @@ function dietTip(key: string, label: string) {
   }
 }
 
-async function add(kcal: number, source: 'Manual' | 'Estimate') {
+const dietLabel = (key: string, label: string) => {
+  if (key !== 'lighter' || !data.value?.diet) return label
+  const kg = data.value.diet.lostKg      // in the user's unit
+  return `${weight(Math.abs(kg), app.unit)} ${app.unit} ${kg >= 0 ? 'lighter' : 'heavier'}`
+}
+
+async function run(change: () => Promise<unknown>) {
   busy.value = true
   actionError.value = ''
   try {
-    await tdeeApi.addEntry(kcal, source)
+    await change()
     handInput.value = ''
     app.refresh()      // every statistic that uses the TDEE refetches, the dashboard included
-    emit('changed')
   } catch (e) {
     actionError.value = (e as Error).message
   } finally {
     busy.value = false
   }
+}
+const add = (kcal: number, source: 'Manual' | 'Estimate') => run(() => tdeeApi.addEntry(kcal, source))
+const remove = () => {
+  const id = removing.value!.id
+  removing.value = null
+  return run(() => tdeeApi.removeEntry(id))
 }
 const saveHand = () => add(Number(handInput.value.trim()), 'Manual')
 const useEstimate = () => data.value?.estimate && add(data.value.estimate.kcal, 'Estimate')
@@ -118,6 +158,13 @@ label { font-weight: 600; }
 input { box-sizing: border-box; width: 100%; height: 46px; border: 1px solid #9ca3af; border-radius: 8px; padding: 0 12px; font: inherit; font-weight: 600; }
 .go { min-height: 46px; padding: 0 18px; border: 0; border-radius: 8px; background: #6d28d9; color: #fff; font: inherit; font-weight: 600; }
 .go:disabled { opacity: 0.5; }
+.hist { border-top: 1px solid #ddd6fe; padding-top: 4px; display: flex; flex-direction: column; }
+.hist div { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; }
+.rm { min-height: 36px; padding: 0 4px; border: 0; background: none; font: inherit; font-size: 13px; color: #5b21b6; }
+.dlg-row { display: flex; justify-content: flex-end; gap: 8px; }
+.dlg-row button { min-height: 44px; padding: 0 16px; border-radius: 8px; font: inherit; font-weight: 600; }
+.plain { border: 1px solid #9ca3af; background: #fff; color: #1f2937; }
+.danger { border: 0; background: #c70036; color: #fff; }
 .box { background: #fff; border: 1px solid #ddd6fe; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 6px; }
 .est-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
 .b { font-weight: 600; }

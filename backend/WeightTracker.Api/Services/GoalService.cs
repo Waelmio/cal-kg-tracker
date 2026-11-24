@@ -42,10 +42,17 @@ public class GoalService(AppDbContext db, IStatsService stats, ICalorieGoalServi
         if (startingWeight is { } sw && sw == dto.TargetWeightKg)
             throw new GoalException("The target weight must differ from the starting weight.");
 
+        // A goal that was reached, or whose date passed, has run its course: only a running one is "replaced".
+        var reason = (await stats.GoalStatusAsync(today))?.State switch
+        {
+            "reached" => GoalEndReason.Reached,
+            "datePassed" => GoalEndReason.Ended,
+            _ => GoalEndReason.Replaced,
+        };
         foreach (var active in await db.Goals.Where(g => g.EndedOn == null).ToListAsync())
         {
             active.EndedOn = today;
-            active.EndReason = GoalEndReason.Replaced;
+            active.EndReason = reason;
         }
 
         var goal = new Goal

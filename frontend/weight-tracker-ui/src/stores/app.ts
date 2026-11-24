@@ -9,7 +9,7 @@ import { localToday } from '../utils/dates'
  * views watch `version` and refetch their statistics. Nothing is computed on the client.
  */
 export const useAppStore = defineStore('app', () => {
-  const settings = ref<UserSettings>({ heightCm: null, preferredUnit: 'kg', tdeeKcal: null, averagingWeeks: 2 })
+  const settings = ref<UserSettings>({ heightCm: null, preferredUnit: 'kg', averagingWeeks: 2 })
   const today = ref(localToday())
   const version = ref(0)
   const loaded = ref(false)
