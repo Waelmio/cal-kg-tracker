@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 namespace WeightTracker.Api.DTOs;
 
 public record DailyLogDto(
-    int Id,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)] int Id,
     string Date,
     decimal? WeightKg,
     int? CaloriesKcal,

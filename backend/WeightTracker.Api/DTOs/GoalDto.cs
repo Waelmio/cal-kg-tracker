@@ -3,8 +3,9 @@ using WeightTracker.Api.Models;
 
 namespace WeightTracker.Api.DTOs;
 
+/// <remarks>In an export the id is left out (0): it carries no meaning and is ignored on import.</remarks>
 public record GoalDto(
-    int Id,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)] int Id,
     decimal TargetWeightKg,
     DateOnly? TargetDate,
     decimal? StartingWeightKg,

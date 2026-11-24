@@ -19,11 +19,11 @@ public class DataService(AppDbContext db) : IDataService
 
         return new ExportImportDto(
             new UserSettingsDto(settings.HeightCm, settings.PreferredUnit, settings.TdeeKcal, settings.AveragingWeeks),
-            logs.Select(l => new DailyLogDto(l.Id, l.Date.ToString("yyyy-MM-dd"), l.WeightKg, l.CaloriesKcal, l.Notes, null, l.IsCheatDay, l.CreatedAt, l.UpdatedAt, l.CaloriesSetOn)).ToList(),
-            goals.Select(g => new GoalDto(g.Id, g.TargetWeightKg, g.TargetDate, g.StartingWeightKg, g.StartDate, g.Notes, g.CreatedAt, g.Kind, g.EndedOn, g.EndReason)).ToList(),
-            calorieGoals.Select(g => new CalorieGoalDto(g.Id, g.TargetCalories, g.CreatedAt, g.EffectiveFrom)).ToList(),
+            logs.Select(l => new DailyLogDto(0, l.Date.ToString("yyyy-MM-dd"), l.WeightKg, l.CaloriesKcal, l.Notes, null, l.IsCheatDay, l.CreatedAt, l.UpdatedAt, l.CaloriesSetOn)).ToList(),
+            goals.Select(g => new GoalDto(0, g.TargetWeightKg, g.TargetDate, g.StartingWeightKg, g.StartDate, g.Notes, g.CreatedAt, g.Kind, g.EndedOn, g.EndReason)).ToList(),
+            calorieGoals.Select(g => new CalorieGoalDto(0, g.TargetCalories, g.CreatedAt, g.EffectiveFrom)).ToList(),
             CurrentVersion,
-            tdeeEntries.Select(t => new TdeeEntryDto(t.Id, t.Kcal, t.EffectiveFrom, t.Source, t.CreatedAt)).ToList()
+            tdeeEntries.Select(t => new TdeeEntryDto(0, t.Kcal, t.EffectiveFrom, t.Source, t.CreatedAt)).ToList()
         );
     }
 

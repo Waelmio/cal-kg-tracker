@@ -88,4 +88,28 @@ public class LegacyImportTests
         Assert.Null(goal.TargetDate);
         Assert.Equal(TdeeSource.Estimate, (await db2.TdeeEntries.SingleAsync()).Source);
     }
+
+    [Fact]
+    public async Task Export_HasNoIds_AndAFileWithoutIdsImports()
+    {
+        using var db = CreateDb();
+        db.DailyLogs.Add(new DailyLog { Date = new DateOnly(2026, 11, 1), CaloriesKcal = 1900, WeightKg = 80m });
+        db.Goals.Add(new Goal { TargetWeightKg = 75, TargetDate = new DateOnly(2027, 1, 1), StartDate = new DateOnly(2026, 6, 1) });
+        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 1900, EffectiveFrom = new DateOnly(2026, 6, 1) });
+        db.TdeeEntries.Add(new TdeeEntry { Kcal = 2400, EffectiveFrom = new DateOnly(2026, 6, 1) });
+        await db.SaveChangesAsync();
+
+        var json = JsonSerializer.Serialize(await new DataService(db).ExportAsync(), Json);
+
+        using var doc = JsonDocument.Parse(json);
+        foreach (var list in new[] { "dailyLogs", "goals", "calorieGoals", "tdeeEntries" })
+            foreach (var row in doc.RootElement.GetProperty(list).EnumerateArray())
+                Assert.False(row.TryGetProperty("id", out _), $"{list} rows must not carry an id");
+
+        using var db2 = CreateDb();
+        await new DataService(db2).ImportAsync(JsonSerializer.Deserialize<ExportImportDto>(json, Json)!);
+        Assert.Equal(1900, (await db2.DailyLogs.SingleAsync()).CaloriesKcal);
+        Assert.Single(await db2.Goals.ToListAsync());
+        Assert.Single(await db2.TdeeEntries.ToListAsync());
+    }
 }
