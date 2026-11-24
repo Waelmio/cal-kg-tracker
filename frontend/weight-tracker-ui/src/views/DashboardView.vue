@@ -40,5 +40,5 @@ const { data, loading, error, reload } = useAsyncData(() => statsApi.getDashboar
 <style scoped>
 .page { max-width: 960px; margin: 0 auto; padding: 20px 16px 24px; display: flex; flex-direction: column; gap: 16px; }
 h1 { margin: 0; font-size: 20px; font-weight: 700; }
-.grid-skeleton { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); gap: 16px; }
+.grid-skeleton { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); column-gap: 16px; row-gap: 0; }
 </style>
