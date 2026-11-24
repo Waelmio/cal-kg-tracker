@@ -77,3 +77,11 @@ export const STATUS_COLORS: Record<Status, { solid: string; light: string; soft:
 
 export const statusText = (s: Status | null): string =>
   s === 'under' ? 'On or under target' : s === 'balanced' ? 'Over, average ok' : s === 'over' ? 'Over target' : 'No log'
+
+/** Calendar cell palettes from the Calendar mockup: [background, text]. "Out" = outside the current goal (lighter). */
+export const CALENDAR_COLORS = {
+  day: { under: ['#d0fae5', '#006045'], balanced: ['#fef3c6', '#973c00'], over: ['#ffe4e6', '#a50036'] },
+  dayOut: { under: ['#f3fcf8', '#3b6b58'], balanced: ['#fffcf0', '#8a5a1c'], over: ['#fff7f8', '#9d4358'] },
+  week: { under: ['#00bc7d', '#ffffff'], balanced: ['#ffb900', '#ffffff'], over: ['#ff2056', '#ffffff'] },
+  weekOut: { under: ['#a4f4cf', '#006045'], balanced: ['#fee685', '#973c00'], over: ['#ffccd3', '#a50036'] },
+} as const satisfies Record<string, Record<Status, readonly [string, string]>>
