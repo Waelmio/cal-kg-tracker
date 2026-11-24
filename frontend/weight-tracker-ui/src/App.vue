@@ -12,9 +12,11 @@ import AppNav from './components/layout/AppNav.vue'
 import LogSheet from './components/daylog/LogSheet.vue'
 import { useAppStore } from './stores/app'
 import { useLogSheetStore } from './stores/logSheet'
+import { useDayDataStore } from './stores/dayData'
 
 const app = useAppStore()
 const sheet = useLogSheetStore()
+const dayData = useDayDataStore()
 
 // The tab may stay open overnight: when it becomes visible again, re-read the local date and refetch.
 function onVisible() {
@@ -25,6 +27,8 @@ onMounted(async () => {
   document.addEventListener('visibilitychange', onVisible)
   await app.loadSettings().catch(() => {})
   app.refresh()
+  // Warm the cache so the log sheet opens with its data already there.
+  dayData.prefetch(app.today)
 })
 onBeforeUnmount(() => document.removeEventListener('visibilitychange', onVisible))
 </script>

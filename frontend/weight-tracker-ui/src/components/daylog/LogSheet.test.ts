@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import LogSheet from './LogSheet.vue'
 import { useAppStore } from '../../stores/app'
 import { useLogSheetStore } from '../../stores/logSheet'
+import { useDayDataStore } from '../../stores/dayData'
 import * as logApi from '../../api/dailyLog'
 import * as statsApi from '../../api/stats'
 import type { CalendarDay, DailyLog } from '../../types'
@@ -17,7 +18,8 @@ const log = (over: Partial<DailyLog> = {}): DailyLog => ({
 })
 
 async function open(existing: DailyLog[] = [], earlier: DailyLog[] = [], day: Partial<CalendarDay> = {}) {
-  vi.mocked(logApi.getAll).mockImplementation(async (p) => (p?.to === '2026-11-23' ? earlier : existing))
+  // the store loads every log once, newest first
+  vi.mocked(logApi.getAll).mockImplementation(async () => [...existing, ...earlier].sort((a, b) => b.date.localeCompare(a.date)))
   vi.mocked(statsApi.getCalendar).mockResolvedValue({ today: '2026-11-24', weeks: [], days: [{ date: '2026-11-24', calories: null, target: 1850, status: null, planned: 1881, plannedLogged: false, inGoal: true, weightKg: null, isCheatDay: false, hasNote: false, ...day }] })
   vi.mocked(logApi.saveDay).mockResolvedValue(log())
   // today 1881 + four other free days at 1881: a pool of 9405
@@ -67,8 +69,6 @@ describe('LogSheet', () => {
   it('finds the last weight however long ago it was', async () => {
     await open([], [log({ date: '2026-03-02', weightKg: 91.2 })])
     expect(q('#kg').placeholder).toBe('91.2')
-    expect(logApi.getAll).toHaveBeenCalledWith(expect.objectContaining({ to: '2026-11-23' }))
-    expect(vi.mocked(logApi.getAll).mock.calls.some(([p]) => p?.to === '2026-11-23' && p.from === undefined)).toBe(true)
   })
 
   it('only fills the last weight when the weight box is clicked', async () => {
@@ -178,9 +178,71 @@ describe('LogSheet', () => {
     expect(useAppStore().version).toBe(before + 1)
   })
 
-  it('moves to the previous day and loads it', async () => {
-    await open()
+  it('moves between days of a loaded week without asking the server again', async () => {
+    await open([log({ date: '2026-11-23', caloriesKcal: 1689 })])
+    const calls = vi.mocked(logApi.getAll).mock.calls.length
     await click('Previous day')
-    expect(logApi.getAll).toHaveBeenCalledWith(expect.objectContaining({ from: '2026-11-23' }))
+    expect(q('#kcal').value).toBe('1689')               // the 23rd, straight from the cache
+    expect(vi.mocked(logApi.getAll).mock.calls.length).toBe(calls)
+  })
+
+  it('shows a loading skeleton while the day is not there yet, then the form', async () => {
+    let release!: (logs: DailyLog[]) => void
+    vi.mocked(logApi.getAll).mockImplementation(() => new Promise((r) => { release = r }))
+    vi.mocked(statsApi.getCalendar).mockResolvedValue({ today: '2026-11-24', weeks: [], days: [] })
+    vi.mocked(statsApi.getDashboard).mockResolvedValue({ budget: null } as never)
+    useAppStore().today = '2026-11-24'
+    useLogSheetStore().open('2026-11-24')
+    mount(LogSheet, { attachTo: document.body })
+    await flushPromises()
+
+    expect(document.body.querySelector('[data-test=skeleton]')).not.toBeNull()
+    expect(document.body.querySelector('#kcal')).toBeNull()
+    expect(saveButton().disabled).toBe(true)
+
+    release([log({ caloriesKcal: 1240 })])
+    await flushPromises()
+    expect(document.body.querySelector('[data-test=skeleton]')).toBeNull()
+    expect(q('#kcal').value).toBe('1240')
+  })
+
+  it('opens instantly the second time: the cache is already there', async () => {
+    const w = await open([log({ caloriesKcal: 1240 })])
+    const logCalls = vi.mocked(logApi.getAll).mock.calls.length
+    const weekCalls = vi.mocked(statsApi.getCalendar).mock.calls.length
+    w.unmount()
+    document.body.innerHTML = ''
+
+    useLogSheetStore().open('2026-11-24')
+    mount(LogSheet, { attachTo: document.body })
+    // no waiting at all: the form is there on the very first render
+    expect(document.body.querySelector('[data-test=skeleton]')).toBeNull()
+    expect(q('#kcal').value).toBe('1240')
+    await flushPromises()
+    expect(vi.mocked(logApi.getAll).mock.calls.length).toBe(logCalls)
+    expect(vi.mocked(statsApi.getCalendar).mock.calls.length).toBe(weekCalls)
+  })
+
+  it('shares one request between callers asking at the same time', async () => {
+    const store = useDayDataStore()
+    vi.mocked(logApi.getAll).mockResolvedValue([])
+    vi.mocked(statsApi.getCalendar).mockResolvedValue({ today: '2026-11-24', weeks: [], days: [] })
+    vi.mocked(statsApi.getDashboard).mockResolvedValue({ budget: null } as never)
+    await Promise.all([store.prefetch('2026-11-24'), store.prefetch('2026-11-24'), store.prefetch('2026-11-25')])
+    expect(vi.mocked(logApi.getAll)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(statsApi.getDashboard)).toHaveBeenCalledTimes(1)
+  })
+
+  it('saving patches the cache at once, and the refresh refetches in the background', async () => {
+    await open([log({ caloriesKcal: 1200 })])
+    const store = useDayDataStore()
+    vi.mocked(logApi.saveDay).mockResolvedValue(log({ caloriesKcal: 1500 }))
+    // the background refresh never answers: only the patch can explain the new value
+    vi.mocked(logApi.getAll).mockImplementation(() => new Promise(() => {}))
+    q('#kcal').value = '1500'; q('#kcal').dispatchEvent(new Event('input')); await flushPromises()
+    const before = vi.mocked(logApi.getAll).mock.calls.length
+    saveButton().click(); await flushPromises()
+    expect(store.logOn('2026-11-24')?.caloriesKcal).toBe(1500)
+    expect(vi.mocked(logApi.getAll).mock.calls.length).toBe(before + 1)
   })
 })

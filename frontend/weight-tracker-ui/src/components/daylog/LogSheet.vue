@@ -13,14 +13,32 @@
         <button type="button" class="box" aria-label="Previous week" @click="go(-7)">‹</button>
         <button v-for="d in weekDays" :key="d.date" type="button" class="day" :aria-pressed="d.date === date" @click="select(d.date)">
           <span class="dn">{{ d.name }}</span>
-          <span class="dk">{{ d.kcal }}</span>
+          <span v-if="ready" class="dk">{{ d.kcal }}</span><span v-else class="skel dk-skel" />
         </button>
         <button type="button" class="box" aria-label="Next week" @click="go(7)">›</button>
       </div>
 
-      <ErrorNote v-if="loadError" :message="loadError" :retry="load" />
+      <ErrorNote v-if="loadError" :message="loadError" :retry="() => store.prefetch(date)" />
 
-      <div class="cols">
+      <!-- Nothing cached yet: placeholders with the shape of the form, shimmering -->
+      <div v-if="!ready" class="cols" data-test="skeleton" aria-busy="true" aria-label="Loading the day">
+        <div class="field">
+          <div class="skel" style="height: 20px; width: 40%" />
+          <div class="skel" style="height: 60px" />
+          <div class="skel" style="height: 44px" />
+          <div class="skel" style="height: 16px; width: 55%" />
+        </div>
+        <div class="right">
+          <div class="field">
+            <div class="skel" style="height: 20px; width: 40%" />
+            <div class="skel" style="height: 60px" />
+          </div>
+          <div class="skel" style="height: 48px" />
+          <div class="skel" style="height: 84px" />
+        </div>
+      </div>
+
+      <div v-else class="cols">
         <!-- Calories -->
         <section class="field">
           <div class="field-head">
@@ -96,20 +114,23 @@ import Modal from '../ui/Modal.vue'
 import ErrorNote from '../ui/ErrorNote.vue'
 import { useAppStore } from '../../stores/app'
 import { useLogSheetStore } from '../../stores/logSheet'
+import { useDayDataStore } from '../../stores/dayData'
 import * as logApi from '../../api/dailyLog'
-import * as statsApi from '../../api/stats'
 import { addDays, mondayOf } from '../../utils/dates'
 import { relativeDay, weekdayShort } from '../../utils/format'
 import { displayWeight, toKg } from '../../utils/units'
-import type { DailyLog } from '../../types'
 
 const app = useAppStore()
 const sheet = useLogSheetStore()
+const store = useDayDataStore()
 const unit = computed(() => app.unit)
 
 const date = ref(sheet.date ?? app.today)
-const loading = ref(false)
-const loadError = ref('')
+// Everything comes from the store's cache: the form is filled as soon as the day is ready.
+const ready = computed(() => store.isReady(date.value))
+const loading = computed(() => !ready.value)
+const loadError = computed(() => (ready.value ? '' : store.error ?? ''))
+const filledFor = ref<string | null>(null)
 const saveError = ref('')
 const saving = ref(false)
 
@@ -119,11 +140,18 @@ const cheat = ref(false)
 const note = ref('')
 const kcalBackup = ref('')   // what "Undo" brings back
 const kgBackup = ref('')
-const weekLogs = ref<DailyLog[]>([])
-const lastWeight = ref<number | null>(null)
-const budget = ref<number | null>(null)
-const target = ref<number | null>(null)
-const week = ref<{ freeKcal: number; others: number; todayBudget: number } | null>(null)
+const weekLogs = computed(() => store.weekLogs(mondayOf(date.value)))
+const lastWeight = computed(() => store.lastWeightBefore(date.value))
+const dayInfo = computed(() => store.dayInfo(date.value))
+const budget = computed(() => dayInfo.value?.planned ?? null)
+const target = computed(() => dayInfo.value?.target ?? null)
+const week = computed(() => {
+  // Today only: what is left of the week's budget for the other free days.
+  const b = store.dashboard?.budget
+  if (date.value !== app.today || !b) return null
+  const free = b.days.filter((d) => !d.userLogged)
+  return free.length > 1 ? { freeKcal: free.reduce((sum, d) => sum + d.kcal, 0), others: free.length - 1, todayBudget: b.todayBudget } : null
+})
 const savedCheat = ref(false)
 
 const kcalValue = computed<number | null>(() => {
@@ -227,48 +255,25 @@ function toggleKg() {
   else { kgBackup.value = kgText.value; kgText.value = '' }
 }
 
-async function load() {
-  loading.value = true
-  loadError.value = ''
+function fill() {
+  const log = store.logOn(date.value)
   kcalBackup.value = ''
   kgBackup.value = ''
   saveError.value = ''
-  try {
-    const monday = mondayOf(date.value)
-    const [logs, earlier, calendar] = await Promise.all([
-      logApi.getAll({ from: monday, to: addDays(monday, 6) }),
-      // The latest weigh-in before this day, however long ago (newest first).
-      logApi.getAll({ to: addDays(date.value, -1), limit: 500 }),
-      statsApi.getCalendar(date.value, date.value),
-    ])
-    weekLogs.value = logs
-    const log = logs.find((l) => l.date === date.value)
-    // Only what is really stored is shown. Never a prefilled target or last weight.
-    kcalText.value = log?.caloriesKcal != null ? String(log.caloriesKcal) : ''
-    kgText.value = log?.weightKg != null ? displayWeight(log.weightKg, unit.value).toFixed(1) : ''
-    cheat.value = log?.isCheatDay ?? false
-    note.value = log?.notes ?? ''
-    lastWeight.value = earlier.find((l) => l.weightKg != null)?.weightKg ?? null
-    savedCheat.value = log?.isCheatDay ?? false
-    week.value = null
-    if (date.value === app.today) {
-      const dash = await statsApi.getDashboard()
-      const free = dash.budget?.days.filter((d) => !d.userLogged) ?? []
-      if (dash.budget && free.length > 1) {
-        week.value = { freeKcal: free.reduce((s, d) => s + d.kcal, 0), others: free.length - 1, todayBudget: dash.budget.todayBudget }
-      }
-    }
-    const day = calendar.days[0]
-    budget.value = day?.planned ?? null
-    target.value = day?.target ?? null
-    // A day with no calories and no planned value starts at the day's target (when there is one).
-    if (log?.caloriesKcal == null && budget.value == null && target.value != null) kcalText.value = String(target.value)
-  } catch (e) {
-    loadError.value = (e as Error).message
-  } finally {
-    loading.value = false
-  }
+  // Only what is really stored is shown. The last weight stays a placeholder.
+  kcalText.value = log?.caloriesKcal != null ? String(log.caloriesKcal) : ''
+  kgText.value = log?.weightKg != null ? displayWeight(log.weightKg, unit.value).toFixed(1) : ''
+  cheat.value = log?.isCheatDay ?? false
+  note.value = log?.notes ?? ''
+  savedCheat.value = log?.isCheatDay ?? false
+  // A day with no calories and no planned value starts at the day's target (when there is one).
+  if (log?.caloriesKcal == null && budget.value == null && target.value != null) kcalText.value = String(target.value)
+  filledFor.value = date.value
 }
+
+// Fill the form once per day, when its data is there. Background refreshes never overwrite what is typed.
+watch([ready, date], ([isReady, d]) => { if (isReady && filledFor.value !== d) fill() }, { immediate: true })
+watch(date, (d) => { store.prefetch(d) })
 
 function go(days: number) { date.value = addDays(date.value, days) }
 function select(d: string) { date.value = d }
@@ -280,14 +285,16 @@ async function save() {
   try {
     if (deleting.value) {
       // Both empty means "Delete entry": the whole day, note and cheat mark included.
-      if (weekLogs.value.some((l) => l.date === date.value)) await logApi.deleteDay(date.value)
+      if (store.logOn(date.value)) await logApi.deleteDay(date.value)
+      store.applySaved(date.value, null)
     } else {
-      await logApi.saveDay(date.value, {
+      const saved = await logApi.saveDay(date.value, {
         weightKg: kgValue.value,
         caloriesKcal: kcalValue.value,
         notes: note.value.trim() === '' ? null : note.value.trim(),
         isCheatDay: cheat.value,
       })
+      store.applySaved(date.value, saved)
     }
     app.refresh()
     sheet.close()
@@ -307,8 +314,7 @@ function onEnter(e: KeyboardEvent) {
 
 function close() { sheet.close() }
 
-onMounted(load)
-watch(date, load)
+onMounted(() => { store.prefetch(date.value) })
 </script>
 
 <style scoped>
@@ -326,6 +332,10 @@ watch(date, load)
 .day[aria-pressed='true'] { background: #0369a1; border-color: #0369a1; color: #fff; }
 button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid #0284c7; outline-offset: 2px; }
 .cols { display: flex; flex-direction: column; gap: 12px; }
+.skel { border-radius: 8px; background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 37%, #f3f4f6 63%); background-size: 400% 100%; animation: shimmer 1.4s ease infinite; }
+.dk-skel { display: block; width: 28px; height: 12px; margin-top: 3px; }
+@keyframes shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+@media (prefers-reduced-motion: reduce) { .skel { animation: none; } }
 .right { display: flex; flex-direction: column; gap: 12px; }
 .field { display: flex; flex-direction: column; gap: 8px; }
 .field-head { display: flex; align-items: center; justify-content: space-between; }
