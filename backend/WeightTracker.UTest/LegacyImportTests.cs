@@ -90,6 +90,27 @@ public class LegacyImportTests
     }
 
     [Fact]
+    public async Task Clear_RemovesEverything_AndResetsSettings()
+    {
+        using var db = CreateDb();
+        db.DailyLogs.Add(new DailyLog { Date = new DateOnly(2026, 11, 1), CaloriesKcal = 1900 });
+        db.Goals.Add(new Goal { TargetWeightKg = 75, StartDate = new DateOnly(2026, 6, 1) });
+        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 1900, EffectiveFrom = new DateOnly(2026, 6, 1) });
+        db.TdeeEntries.Add(new TdeeEntry { Kcal = 2400, EffectiveFrom = new DateOnly(2026, 6, 1) });
+        db.UserSettings.Add(new UserSettings { Id = 1, HeightCm = 178, PreferredUnit = "lbs", TdeeKcal = 2400, AveragingWeeks = 4 });
+        await db.SaveChangesAsync();
+
+        await new DataService(db).ClearAsync();
+
+        Assert.Empty(await db.DailyLogs.ToListAsync());
+        Assert.Empty(await db.Goals.ToListAsync());
+        Assert.Empty(await db.CalorieGoals.ToListAsync());
+        Assert.Empty(await db.TdeeEntries.ToListAsync());
+        var s = await db.UserSettings.SingleAsync();
+        Assert.Equal((null, "kg", null, 2), (s.HeightCm, s.PreferredUnit, s.TdeeKcal, s.AveragingWeeks));
+    }
+
+    [Fact]
     public async Task Export_HasNoIds_AndAFileWithoutIdsImports()
     {
         using var db = CreateDb();

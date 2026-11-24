@@ -46,12 +46,25 @@
             <button type="button" class="plain small-btn" @click="pending = null">Cancel</button>
           </div>
         </div>
+        <button type="button" class="clear" :disabled="clearing" @click="confirmClear = true">{{ clearing ? 'Clearing…' : 'Clear data' }}</button>
         <p v-if="dataError" role="alert" class="error">{{ dataError }}</p>
         <p v-if="imported" role="status" class="ok">Import done.</p>
+        <p v-if="cleared" role="status" class="ok">All data cleared.</p>
       </section>
 
       <p v-if="saveError" role="alert" class="error">{{ saveError }}</p>
       <p v-if="saved" role="status" class="ok">Saved.</p>
+      <Modal v-if="confirmClear" title="Delete all your data?" max-width="440px" @close="confirmClear = false">
+        <p class="dlg">This permanently deletes every log, weight goal, calorie target and TDEE entry, and resets your settings. It can't be undone.</p>
+        <p class="dlg">Export first if you want a copy.</p>
+        <template #footer>
+          <div class="dlg-row">
+            <button type="button" class="plain small-btn" @click="confirmClear = false">Cancel</button>
+            <button type="button" class="danger" @click="clearAll">Delete everything</button>
+          </div>
+        </template>
+      </Modal>
+
       <button type="button" class="save" :disabled="saving" @click="save">{{ saving ? 'Saving…' : 'Save settings' }}</button>
     </div>
   </main>
@@ -59,8 +72,9 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import Modal from '../components/ui/Modal.vue'
 import { useAppStore } from '../stores/app'
-import { exportData, importData } from '../api/data'
+import { clearData, exportData, importData } from '../api/data'
 import * as statsApi from '../api/stats'
 import { localToday } from '../utils/dates'
 
@@ -75,6 +89,9 @@ const importing = ref(false)
 const imported = ref(false)
 const dataError = ref('')
 const pending = ref<{ name: string; data: object } | null>(null)
+const confirmClear = ref(false)
+const clearing = ref(false)
+const cleared = ref(false)
 
 const previewBudget = computed(() => budgets.value.find((b) => b.weeks === form.averagingWeeks)?.todayBudget ?? null)
 
@@ -115,6 +132,27 @@ async function doExport() {
     dataError.value = (e as Error).message
   } finally {
     exporting.value = false
+  }
+}
+
+async function clearAll() {
+  confirmClear.value = false
+  clearing.value = true
+  dataError.value = ''
+  imported.value = false
+  cleared.value = false
+  try {
+    await clearData()
+    await app.loadSettings()
+    form.heightCm = app.settings.heightCm
+    form.preferredUnit = app.settings.preferredUnit
+    form.averagingWeeks = app.settings.averagingWeeks
+    app.refresh()
+    cleared.value = true
+  } catch (e) {
+    dataError.value = (e as Error).message
+  } finally {
+    clearing.value = false
   }
 }
 
@@ -182,6 +220,9 @@ input[type='number'] { box-sizing: border-box; width: 100%; height: 48px; border
 .askt { color: #881337; }
 .row { display: flex; gap: 8px; }
 .danger { min-height: 44px; padding: 0 16px; border: 0; border-radius: 8px; background: #c70036; color: #fff; font: inherit; font-weight: 600; }
+.clear { min-height: 48px; border: 1px solid #fda4af; border-radius: 8px; background: #fff; color: #c70036; font: inherit; font-weight: 600; }
+.dlg { margin: 0 0 8px; }
+.dlg-row { display: flex; justify-content: flex-end; gap: 8px; }
 .save { min-height: 52px; border: 0; border-radius: 10px; background: #0284c7; color: #fff; font: inherit; font-size: 16px; font-weight: 600; }
 .save:hover:not(:disabled) { background: #0369a1; }
 .error { margin: 0; color: #a50036; background: #ffe4e6; padding: 10px 12px; border-radius: 8px; }

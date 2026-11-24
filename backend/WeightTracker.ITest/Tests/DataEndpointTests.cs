@@ -25,6 +25,22 @@ public abstract class DataEndpointTestsBase
     }
 
     [Fact]
+    public async Task Delete_ClearsAllData_AndTheAppStillWorks()
+    {
+        await ResetAsync();
+        await SeedAsync(b => b.WithDailyLog("2024-01-10", weightKg: 80m, calories: 2000).WithCalorieGoal(1900));
+
+        var response = await Client.DeleteAsync("/api/data");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        var export = await Client.GetFromJsonAsync<ExportImportDto>("/api/data/export");
+        Assert.Empty(export!.DailyLogs);
+        Assert.Empty(export.CalorieGoals);
+        Assert.Equal(HttpStatusCode.OK, (await Client.GetAsync("/api/settings")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Client.GetAsync("/api/stats/dashboard?today=2024-02-01")).StatusCode);
+    }
+
+    [Fact]
     public async Task Export_ReturnsEmptyCollections_WhenNoData()
     {
         await ResetAsync();

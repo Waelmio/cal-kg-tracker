@@ -51,6 +51,6 @@ Every statistic is computed server-side. Reads and `PUT /api/daily-logs/{date}` 
 | Method | Path | Notes |
 |---|---|---|
 | GET/PUT | `/api/settings` | Height, unit, `averagingWeeks` (1 to 5) |
-| GET/POST | `/api/data/export`, `/api/data/import` | Export is `version: 2`. Import also accepts the older format |
+| GET/POST/DELETE | `/api/data/export`, `/api/data/import`, `/api/data` | Export is `version: 2`. Import also accepts the older format. DELETE clears all data and resets settings |
 
 Removed in the redesign: `prefill-week`, `/cheat-day`, `/weight` and `/calories` deletes, `/api/dashboard`, `/api/tdee`.

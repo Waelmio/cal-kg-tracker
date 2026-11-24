@@ -27,6 +27,24 @@ public class DataService(AppDbContext db) : IDataService
         );
     }
 
+    public async Task ClearAsync()
+    {
+        db.DailyLogs.RemoveRange(await db.DailyLogs.ToListAsync());
+        db.Goals.RemoveRange(await db.Goals.ToListAsync());
+        db.CalorieGoals.RemoveRange(await db.CalorieGoals.ToListAsync());
+        db.TdeeEntries.RemoveRange(await db.TdeeEntries.ToListAsync());
+
+        // The settings row always exists (Id = 1); reset it rather than delete it.
+        var s = await db.UserSettings.FindAsync(1);
+        if (s is null) { s = new UserSettings { Id = 1 }; db.UserSettings.Add(s); }
+        s.HeightCm = null;
+        s.PreferredUnit = "kg";
+        s.TdeeKcal = null;
+        s.AveragingWeeks = 2;
+
+        await db.SaveChangesAsync();
+    }
+
     public async Task ImportAsync(ExportImportDto dto)
     {
         var legacy = dto.Version is null or < 2;
