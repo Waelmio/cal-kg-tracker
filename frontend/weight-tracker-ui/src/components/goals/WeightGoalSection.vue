@@ -18,6 +18,7 @@
 
     <GoalCard v-else :goal="status" :unit="app.unit" :today="app.today" :series="dash?.weightSeries">
       <template #actions>
+        <p v-if="advice" class="foot">{{ advice }}</p>
         <div v-if="!form" class="row">
           <template v-if="status.state === 'active'">
             <button v-if="status.kind === 'Reach' && status.pace === 'behind' && status.projectedDate" type="button" class="btn-secondary" :disabled="busy" @click="moveDate(status.projectedDate)">Move date to {{ shortDate(status.projectedDate) }}</button>
@@ -79,6 +80,11 @@ const app = useAppStore()
 const status = computed(() => props.dash?.goal ?? null)
 const activeGoal = computed(() => props.goals.find((g) => g.endedOn == null) ?? null)
 const past = computed(() => props.goals.filter((g) => g.endedOn != null))
+const advice = computed(() => {
+  const c = props.dash?.targetComparison
+  if (!c || c.onTimeKcal == null || c.last4Avg == null) return ''
+  return `You averaged ${c.last4Avg} kcal over the last four full weeks. About ${c.onTimeKcal} gets you there on time.`
+})
 const form = ref<'new' | 'edit' | null>(null)
 const busy = ref(false)
 const actionError = ref('')

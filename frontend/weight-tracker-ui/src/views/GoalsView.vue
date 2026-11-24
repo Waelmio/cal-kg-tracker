@@ -6,7 +6,7 @@
 
     <template v-if="data">
       <WeightGoalSection :dash="data.dash" :goals="data.goals" @changed="reload" @turn-off-target="turnOffTarget" />
-      <CalorieTargetSection :current="data.dash.calorieTarget" :goals="data.calorieGoals" @changed="reload" @turn-off="turnOffTarget" />
+      <CalorieTargetSection :current="data.dash.calorieTarget" :comparison="data.dash.targetComparison" :goals="data.calorieGoals" @changed="reload" @turn-off="turnOffTarget" />
       <TdeeSection :current="data.dash.tdee" @changed="reload" />
     </template>
   </main>

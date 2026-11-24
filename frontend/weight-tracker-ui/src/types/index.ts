@@ -153,6 +153,12 @@ export interface DashboardStats {
   weight: { kg: number | null; isAverage: boolean; date: string | null; paceKgPerWeek: number | null; paceWeighIns: number; bmi: number | null }
   goal: GoalStatus | null
   weightSeries: { date: string; kg: number; avg7: number }[]
+  targetComparison: {
+    target: number | null; tdee: number | null
+    targetDeficit: number | null; targetKgPerWeek: number | null
+    last4Avg: number | null; last4Deficit: number | null; last4KgPerWeek: number | null
+    onTimeKcal: number | null
+  }
 }
 
 export interface CalendarDay {

@@ -76,6 +76,12 @@ public abstract class StatsEndpointTestsBase
         Assert.Equal(84.07, Math.Round(weight.GetProperty("kg").GetDouble(), 2));
         Assert.Equal(-0.41, Math.Round(weight.GetProperty("paceKgPerWeek").GetDouble(), 2));
 
+        var cmp = d.GetProperty("targetComparison");
+        Assert.Equal(500, cmp.GetProperty("targetDeficit").GetInt32());                      // 2350 - 1850
+        Assert.Equal(0.45, Math.Round(cmp.GetProperty("targetKgPerWeek").GetDouble(), 2));   // 500 * 7 / 7700
+        Assert.Equal(2350 - cmp.GetProperty("last4Avg").GetInt32(), cmp.GetProperty("last4Deficit").GetInt32());
+        Assert.InRange(cmp.GetProperty("onTimeKcal").GetInt32(), 1760, 1775);                // 2350 - 0.53 * 7700 / 7
+
         var goal = d.GetProperty("goal");
         Assert.Equal("active", goal.GetProperty("state").GetString());
         Assert.Equal(43, Math.Round(goal.GetProperty("progressPercent").GetDouble()));

@@ -114,7 +114,29 @@ public class StatsService(AppDbContext db) : IStatsService
             new StreakDto(streak.Days, streak.NextGap, rows),
             new DeficitsDto(weekly, overall), weightDto,
             GoalFor(goals, c),
-            WeightSeries(c, activeGoal?.StartDate ?? today.AddDays(-90)));
+            WeightSeries(c, activeGoal?.StartDate ?? today.AddDays(-90)),
+            Comparison(c, GoalFor(goals, c)));
+    }
+
+    private static TargetComparisonDto Comparison(StatsCalculator c, GoalStatusDto? goal)
+    {
+        var today = c.Today;
+        var tdee = c.Tdee(today);
+        var target = c.CalorieTarget(today);
+        static double Pace(int deficit) => deficit * 7 / KcalPerKg;
+
+        int? tDef = tdee is { } t && target is { } k ? t - k : null;
+        var monday = MondayOf(today);
+        var last4 = c.Period(monday.AddDays(-28), monday.AddDays(-1));
+        int? avg = last4.AvgCalories is { } a ? Rnd(a) : null;
+        int? l4Def = tdee is { } t2 && avg is { } a2 ? t2 - a2 : null;
+
+        // Intake that reaches the goal on time: the TDEE minus the deficit the needed weekly loss takes.
+        int? onTime = tdee is { } t3 && goal is { State: "active", Kind: "Reach", NeededKgPerWeek: { } need }
+            ? Rnd(t3 - need * KcalPerKg / 7) : null;
+
+        return new TargetComparisonDto(target, tdee, tDef, tDef is { } d1 ? Pace(d1) : null,
+            avg, l4Def, l4Def is { } d2 ? Pace(d2) : null, onTime);
     }
 
     public async Task<List<WeightPointDto>> WeightsAsync(DateOnly from, DateOnly today)

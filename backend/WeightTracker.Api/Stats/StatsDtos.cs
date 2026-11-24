@@ -57,7 +57,18 @@ public record DashboardStatsDto(
     DeficitsDto Deficits,
     WeightDto Weight,
     GoalStatusDto? Goal,
-    List<WeightPointDto> WeightSeries);
+    List<WeightPointDto> WeightSeries,
+    TargetComparisonDto TargetComparison);
+
+/// <summary>
+/// What the calorie target, the last four full weeks and the goal's schedule each mean against the TDEE in force.
+/// A deficit becomes a pace the same way as everywhere else: kcal * 7 / 7700 kg a week.
+/// </summary>
+public record TargetComparisonDto(
+    int? Target, int? Tdee,
+    int? TargetDeficit, double? TargetKgPerWeek,
+    int? Last4Avg, int? Last4Deficit, double? Last4KgPerWeek,
+    int? OnTimeKcal);
 
 /// <summary>A weigh-in with the 7-day average ending that day. Starts at the goal's start date (else 90 days back).</summary>
 public record WeightPointDto(string Date, double Kg, double Avg7);

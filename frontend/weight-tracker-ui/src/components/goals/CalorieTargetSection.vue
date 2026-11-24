@@ -8,6 +8,12 @@
       </template>
       <p v-else class="big"><span class="unit">No calorie target</span></p>
 
+      <dl v-if="comparison && comparison.tdee != null" class="cmp">
+        <div v-if="comparison.targetDeficit != null"><dt>At target</dt><dd>{{ deficitText(comparison.targetDeficit, comparison.targetKgPerWeek) }}</dd></div>
+        <div v-if="comparison.last4Avg != null && comparison.last4Deficit != null"><dt>Last 4 weeks, {{ comparison.last4Avg }}</dt><dd>{{ deficitText(comparison.last4Deficit, comparison.last4KgPerWeek) }}</dd></div>
+        <div v-if="comparison.onTimeKcal != null"><dt>On time for the goal</dt><dd>about {{ comparison.onTimeKcal }} a day</dd></div>
+      </dl>
+
       <form class="row" @submit.prevent="set">
         <div class="f">
           <label for="ct">New target</label>
@@ -30,9 +36,10 @@ import { computed, ref } from 'vue'
 import { useAppStore } from '../../stores/app'
 import * as api from '../../api/calorieGoals'
 import { shortDate } from '../../utils/format'
-import type { CalorieGoal } from '../../types'
+import { weightChange } from '../../utils/format'
+import type { CalorieGoal, DashboardStats } from '../../types'
 
-const props = defineProps<{ current: number | null; goals: CalorieGoal[] }>()
+const props = defineProps<{ current: number | null; goals: CalorieGoal[]; comparison?: DashboardStats['targetComparison'] | null }>()
 const emit = defineEmits<{ changed: []; 'turn-off': [] }>()
 
 const app = useAppStore()
@@ -46,6 +53,12 @@ const history = computed(() =>
     id: g.id, since: `Since ${shortDate(g.effectiveFrom, true)}`, kcal: g.targetCalories == null ? 'Off' : String(g.targetCalories),
   })),
 )
+
+function deficitText(deficit: number, kgPerWeek: number | null) {
+  const side = deficit >= 0 ? 'below' : 'above'
+  const pace = kgPerWeek == null ? '' : `, ${weightChange(-kgPerWeek, app.unit, 2)} ${app.unit} a week`
+  return `${Math.abs(deficit)} ${side} TDEE${pace}`
+}
 
 async function set() {
   busy.value = true
@@ -75,6 +88,10 @@ h2 { margin: 0; font-size: 18px; color: #9a3412; }
 label { font-weight: 600; }
 .input { min-height: 44px; width: 160px; }
 .row button { min-height: 44px; }
+.cmp { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.cmp div { display: flex; justify-content: space-between; gap: 12px; }
+.cmp dt { color: #4b5563; }
+.cmp dd { margin: 0; font-weight: 600; text-align: right; }
 .hist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; color: #4b5563; }
 .hist li { display: flex; justify-content: space-between; gap: 12px; }
 .hist strong { color: #1f2937; }
