@@ -1,69 +1,72 @@
 <template>
   <main class="page">
-    <h1>Settings</h1>
+    <div class="card">
+      <h1>Settings</h1>
 
-    <form class="card" @submit.prevent="save">
-      <h2>You</h2>
-      <div class="field">
-        <label for="height">Height (cm)</label>
-        <input id="height" v-model.number="form.heightCm" class="input" type="number" min="50" max="300" step="1" inputmode="numeric" placeholder="e.g. 175" />
-        <p class="hint">Used to calculate BMI.</p>
-      </div>
-      <div class="field">
-        <label for="unit">Weight unit</label>
-        <select id="unit" v-model="form.preferredUnit" class="input">
-          <option value="kg">Kilograms (kg)</option>
-          <option value="lbs">Pounds (lbs)</option>
-        </select>
-        <p class="hint">Weights are stored in kg. This only changes how they are shown.</p>
-      </div>
-      <div class="field">
-        <label for="weeks">Averaging window</label>
-        <select id="weeks" v-model.number="form.averagingWeeks" class="input">
-          <option v-for="n in 5" :key="n" :value="n">{{ n }} {{ n === 1 ? 'week' : 'weeks' }}</option>
-        </select>
-        <p class="hint">How many weeks you have to reach your target on average.</p>
-      </div>
+      <section class="sec">
+        <h2>Calorie averaging window</h2>
+        <div class="muted">How many weeks you have to reach your target on average.</div>
+        <div class="five" role="group" aria-label="Averaging window">
+          <button v-for="n in 5" :key="n" type="button" :aria-pressed="form.averagingWeeks === n" @click="form.averagingWeeks = n">{{ n === 1 ? '1 week' : n + ' weeks' }}</button>
+        </div>
+        <div v-if="previewBudget != null" class="line"><span class="muted">Budget this week</span><strong>{{ previewBudget }} kcal a day</strong></div>
+        <div class="muted small">Changes your daily budget, planned days and which weeks show yellow. Averages and deficits stay the same.</div>
+      </section>
+
+      <section class="sec ruled">
+        <h2>Profile</h2>
+        <div class="two">
+          <div class="f">
+            <label for="height">Height (cm)</label>
+            <input id="height" v-model.number="form.heightCm" type="number" min="50" max="300" step="1" inputmode="numeric" placeholder="e.g. 175" />
+          </div>
+          <div class="f">
+            <span class="b">Weight unit</span>
+            <div class="units" role="group" aria-label="Weight unit">
+              <button v-for="u in ['kg', 'lbs'] as const" :key="u" type="button" :aria-pressed="form.preferredUnit === u" @click="form.preferredUnit = u">{{ u }}</button>
+            </div>
+          </div>
+        </div>
+        <div class="muted small">Height is used for BMI. TDEE and targets are in Goals. Weights are stored in kg; the unit only changes how they are shown.</div>
+      </section>
+
+      <section class="sec ruled">
+        <h2>Data</h2>
+        <div class="units">
+          <button type="button" class="plain" :disabled="exporting" @click="doExport">{{ exporting ? 'Exporting…' : 'Export' }}</button>
+          <label class="plain pick">
+            {{ importing ? 'Importing…' : 'Import' }}
+            <input type="file" accept=".json,application/json" :disabled="importing" @change="onPick" />
+          </label>
+        </div>
+        <div v-if="pending" class="ask" role="alertdialog" aria-label="Replace your data?">
+          <div class="askt">Importing <strong>{{ pending.name }}</strong> replaces all your logs, goals and settings.</div>
+          <div class="row">
+            <button type="button" class="danger" @click="confirmImport">Replace everything</button>
+            <button type="button" class="plain small-btn" @click="pending = null">Cancel</button>
+          </div>
+        </div>
+        <p v-if="dataError" role="alert" class="error">{{ dataError }}</p>
+        <p v-if="imported" role="status" class="ok">Import done.</p>
+      </section>
+
       <p v-if="saveError" role="alert" class="error">{{ saveError }}</p>
       <p v-if="saved" role="status" class="ok">Saved.</p>
-      <div><button type="submit" class="btn-primary" :disabled="saving">{{ saving ? 'Saving…' : 'Save settings' }}</button></div>
-    </form>
-
-    <section class="card" aria-labelledby="data">
-      <h2 id="data">Your data</h2>
-      <p class="hint">Export everything as a JSON file, or restore from one. Importing replaces what is in the app now.</p>
-      <div class="row">
-        <button type="button" class="btn-secondary" :disabled="exporting" @click="doExport">{{ exporting ? 'Exporting…' : 'Export JSON' }}</button>
-        <label class="btn-secondary pick">
-          {{ importing ? 'Importing…' : 'Import JSON' }}
-          <input type="file" accept=".json,application/json" :disabled="importing" @change="onPick" />
-        </label>
-      </div>
-      <p v-if="dataError" role="alert" class="error">{{ dataError }}</p>
-      <p v-if="imported" role="status" class="ok">Import done.</p>
-    </section>
-
-    <Modal v-if="pending" title="Replace your data?" max-width="440px" @close="pending = null">
-      <p>Importing <strong>{{ pending.name }}</strong> replaces every log, goal and setting in the app with the file's contents. This can't be undone. Export first if you want a copy.</p>
-      <template #footer>
-        <div class="row end">
-          <button type="button" class="btn-secondary" @click="pending = null">Cancel</button>
-          <button type="button" class="btn-primary danger" @click="confirmImport">Replace my data</button>
-        </div>
-      </template>
-    </Modal>
+      <button type="button" class="save" :disabled="saving" @click="save">{{ saving ? 'Saving…' : 'Save settings' }}</button>
+    </div>
   </main>
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
-import Modal from '../components/ui/Modal.vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useAppStore } from '../stores/app'
 import { exportData, importData } from '../api/data'
+import * as statsApi from '../api/stats'
 import { localToday } from '../utils/dates'
 
 const app = useAppStore()
 const form = reactive({ heightCm: null as number | null, preferredUnit: 'kg' as 'kg' | 'lbs', averagingWeeks: 2 })
+const budgets = ref<{ weeks: number; todayBudget: number | null }[]>([])
 const saving = ref(false)
 const saved = ref(false)
 const saveError = ref('')
@@ -73,11 +76,14 @@ const imported = ref(false)
 const dataError = ref('')
 const pending = ref<{ name: string; data: object } | null>(null)
 
+const previewBudget = computed(() => budgets.value.find((b) => b.weeks === form.averagingWeeks)?.todayBudget ?? null)
+
 onMounted(async () => {
   if (!app.loaded) await app.loadSettings().catch(() => {})
   form.heightCm = app.settings.heightCm
   form.preferredUnit = app.settings.preferredUnit
   form.averagingWeeks = app.settings.averagingWeeks
+  budgets.value = await statsApi.getBudgetByWindow().catch(() => [])
 })
 
 async function save() {
@@ -135,6 +141,9 @@ async function confirmImport() {
   try {
     await importData(data)
     await app.loadSettings()
+    form.heightCm = app.settings.heightCm
+    form.preferredUnit = app.settings.preferredUnit
+    form.averagingWeeks = app.settings.averagingWeeks
     app.refresh()
     imported.value = true
   } catch (e) {
@@ -146,21 +155,37 @@ async function confirmImport() {
 </script>
 
 <style scoped>
-.page { max-width: 640px; margin: 0 auto; padding: 20px 16px 24px; display: flex; flex-direction: column; gap: 16px; }
-h1 { margin: 0; font-size: 20px; }
-h2 { margin: 0; font-size: 16px; }
-.card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
-.field { display: flex; flex-direction: column; gap: 4px; }
-label { font-weight: 600; }
-.input { min-height: 44px; }
-.hint { margin: 0; color: #4b5563; font-size: 13px; }
-.row { display: flex; flex-wrap: wrap; gap: 8px; }
-.row.end { justify-content: flex-end; }
-.pick { position: relative; cursor: pointer; display: inline-flex; align-items: center; min-height: 44px; }
+.page { max-width: 648px; margin: 0 auto; padding: 20px 16px 24px; color: #1f2937; font-size: 15px; line-height: 1.45; font-variant-numeric: tabular-nums; }
+.card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 20px 24px 24px; display: flex; flex-direction: column; gap: 22px; }
+h1 { margin: 0; font-size: 20px; font-weight: 700; }
+h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.sec { display: flex; flex-direction: column; gap: 10px; }
+.ruled { border-top: 1px solid #e5e7eb; padding-top: 18px; gap: 12px; }
+.muted { color: #4b5563; }
+.small { font-size: 14px; }
+.sec > .muted:first-of-type { color: #374151; }
+.five { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.five button, .units button { min-height: 48px; border-radius: 8px; border: 1px solid #9ca3af; background: #fff; color: #374151; font: inherit; font-weight: 600; }
+.five button[aria-pressed='true'], .units button[aria-pressed='true'] { background: #0369a1; border-color: #0369a1; color: #fff; }
+.line { display: flex; justify-content: space-between; gap: 12px; }
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.f { display: flex; flex-direction: column; gap: 6px; }
+label, .b { font-weight: 600; }
+input[type='number'] { box-sizing: border-box; width: 100%; height: 48px; border: 1px solid #9ca3af; border-radius: 8px; padding: 0 14px; font: inherit; color: #1f2937; }
+.units { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.plain { min-height: 48px; border: 1px solid #9ca3af; border-radius: 8px; background: #fff; color: #1f2937; font: inherit; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; }
+.small-btn { min-height: 44px; padding: 0 16px; }
+.pick { position: relative; cursor: pointer; }
 .pick input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .pick:focus-within { outline: 2px solid #0284c7; }
+.ask { background: #fff1f2; border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.askt { color: #881337; }
+.row { display: flex; gap: 8px; }
+.danger { min-height: 44px; padding: 0 16px; border: 0; border-radius: 8px; background: #c70036; color: #fff; font: inherit; font-weight: 600; }
+.save { min-height: 52px; border: 0; border-radius: 10px; background: #0284c7; color: #fff; font: inherit; font-size: 16px; font-weight: 600; }
+.save:hover:not(:disabled) { background: #0369a1; }
 .error { margin: 0; color: #a50036; background: #ffe4e6; padding: 10px 12px; border-radius: 8px; }
 .ok { margin: 0; color: #006045; }
-.danger { background: #c70036; }
-.btn-primary, .btn-secondary { min-height: 44px; }
+button:focus-visible, input:focus-visible { outline: 2px solid #0284c7; outline-offset: 2px; }
+@media (max-width: 639px) { .card { padding: 16px; } .two { grid-template-columns: 1fr; } .five { grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); } }
 </style>

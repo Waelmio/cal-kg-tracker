@@ -1,33 +1,18 @@
 <template>
   <form class="form" @submit.prevent="submit">
-    <h3>{{ goal ? 'Edit goal' : 'New weight goal' }}</h3>
-    <div class="grid">
-      <div class="f">
-        <label for="gt">Target weight ({{ unit }})</label>
-        <input id="gt" v-model="target" class="input" inputmode="decimal" required />
-      </div>
-      <div class="f">
-        <label for="gd">Target date</label>
-        <input id="gd" v-model="targetDate" class="input" type="date" :min="addDays(startDate, 1)" required />
-      </div>
-      <div class="f">
-        <label for="gs">Start date</label>
-        <input id="gs" v-model="startDate" class="input" type="date" :max="app.today" />
-      </div>
-      <div class="f">
-        <label for="gw">Starting weight ({{ unit }})</label>
-        <input id="gw" v-model="startWeight" class="input" inputmode="decimal" :placeholder="goal ? '' : 'From your weigh-ins'" />
-        <p class="hint">{{ startWeight.trim() === '' ? 'From your weigh-ins on the start date' : 'Typed by you' }}</p>
-      </div>
-    </div>
+    <div class="f"><label for="gt">Target weight ({{ unit }})</label><input id="gt" v-model="target" inputmode="decimal" required /></div>
+    <div class="f"><label for="gd">Target date</label><input id="gd" v-model="targetDate" type="date" :min="addDays(startDate, 1)" required /></div>
+    <div class="f"><label for="gs">Start date</label><input id="gs" v-model="startDate" type="date" :max="app.today" /></div>
     <div class="f">
-      <label for="gn">Note <span class="opt">(optional)</span></label>
-      <textarea id="gn" v-model="notes" rows="2" maxlength="500" class="input" />
+      <label for="gw">Starting weight ({{ unit }})</label>
+      <input id="gw" v-model="startWeight" inputmode="decimal" />
+      <span class="hint">{{ startWeight.trim() === '' ? 'From your weigh-ins on the start date' : 'Typed by you' }}</span>
     </div>
-    <p v-if="error" role="alert" class="error">{{ error }}</p>
-    <div class="row">
-      <button type="submit" class="btn-primary" :disabled="saving">{{ saving ? 'Saving…' : goal ? 'Save goal' : 'Set goal' }}</button>
-      <button type="button" class="btn-secondary" @click="$emit('cancel')">Cancel</button>
+    <div class="f wide"><label for="gn">Note</label><textarea id="gn" v-model="notes" rows="2" maxlength="500" /></div>
+    <p v-if="error" role="alert" class="error wide">{{ error }}</p>
+    <div class="wide row">
+      <button type="submit" class="primary" :disabled="saving">{{ saving ? 'Saving…' : goal ? 'Save goal' : 'Set goal' }}</button>
+      <button type="button" class="cancel" @click="$emit('cancel')">Cancel</button>
     </div>
   </form>
 </template>
@@ -86,15 +71,15 @@ async function submit() {
 </script>
 
 <style scoped>
-.form { display: flex; flex-direction: column; gap: 12px; border-top: 1px solid #e5e7eb; padding-top: 14px; }
-h3 { margin: 0; font-size: 15px; }
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
-.f { display: flex; flex-direction: column; gap: 4px; }
+.form { background: #fff; border: 1px solid #bae6fd; border-radius: 10px; padding: 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 14px; }
+.f { display: flex; flex-direction: column; gap: 6px; }
+.wide { grid-column: 1 / -1; }
 label { font-weight: 600; }
-.opt { font-weight: 400; color: #6b7280; }
-.input { min-height: 44px; }
-.hint { margin: 0; color: #4b5563; font-size: 13px; }
-.row { display: flex; gap: 8px; flex-wrap: wrap; }
-.row button { min-height: 44px; }
+input, textarea { box-sizing: border-box; width: 100%; height: 46px; border: 1px solid #9ca3af; border-radius: 8px; padding: 0 12px; font: inherit; }
+textarea { height: auto; padding: 10px 12px; }
+.hint { font-size: 13px; color: #4b5563; }
+.row { display: flex; gap: 10px; }
+.primary { min-height: 44px; padding: 0 18px; border: 0; border-radius: 8px; background: #0369a1; color: #fff; font: inherit; font-weight: 600; }
+.cancel { min-height: 44px; padding: 0 18px; border: 1px solid #9ca3af; border-radius: 8px; background: #fff; color: #1f2937; font: inherit; font-weight: 600; }
 .error { margin: 0; color: #a50036; background: #ffe4e6; padding: 10px 12px; border-radius: 8px; }
 </style>

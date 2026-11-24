@@ -15,6 +15,7 @@ public interface IStatsService
     Task<TdeeStatsDto> TdeeAsync(int days, DateOnly today);
     Task<GoalStatusDto?> GoalStatusAsync(DateOnly today);
     Task<List<WeightPointDto>> WeightsAsync(DateOnly from, DateOnly today);
+    Task<List<BudgetByWindowDto>> BudgetByWindowAsync(DateOnly today);
 }
 
 public class StatsService(AppDbContext db) : IStatsService
@@ -107,7 +108,9 @@ public class StatsService(AppDbContext db) : IStatsService
         double? bmi = weight is not null && settings.HeightCm is > 0
             ? Math.Round(weight.Kg / Math.Pow(settings.HeightCm.Value / 100.0, 2), 1) : null;
         var weightDto = new WeightDto(weight?.Kg, weight?.IsAverage ?? false, weight?.Date is { } wd ? Fmt(wd) : null,
-            pace.KgPerDay is { } kd ? kd * 7 : null, pace.WeighIns, bmi);
+            pace.KgPerDay is { } kd ? kd * 7 : null, pace.WeighIns, bmi,
+            activeGoal is not null && settings.HeightCm is > 0
+                ? Math.Round((double)activeGoal.TargetWeightKg / Math.Pow(settings.HeightCm.Value / 100.0, 2), 1) : null);
 
         return new DashboardStatsDto(
             Fmt(today), c.Window, c.CalorieTarget(today), c.Tdee(today), budgetDto, week,
@@ -137,6 +140,17 @@ public class StatsService(AppDbContext db) : IStatsService
 
         return new TargetComparisonDto(target, tdee, tDef, tDef is { } d1 ? Pace(d1) : null,
             avg, l4Def, l4Def is { } d2 ? Pace(d2) : null, onTime);
+    }
+
+    /// <summary>Today's budget for each averaging window, so settings can preview what a window changes.</summary>
+    public async Task<List<BudgetByWindowDto>> BudgetByWindowAsync(DateOnly today)
+    {
+        var (c, _, _) = await LoadAsync(today);
+        return Enumerable.Range(1, 5).Select(w =>
+        {
+            var calc = new StatsCalculator(c.Data.WithWindow(w));
+            return new BudgetByWindowDto(w, calc.Budget(calc.Calories(today))?.TodayBudget);
+        }).ToList();
     }
 
     public async Task<List<WeightPointDto>> WeightsAsync(DateOnly from, DateOnly today)

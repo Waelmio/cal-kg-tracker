@@ -21,3 +21,6 @@ export const getTdee = (days: 30 | 60 | 90) =>
 
 export const getWeights = (from: string) =>
   client.get<{ date: string; kg: number; avg7: number }[]>('/stats/weights', { params: { from, today: today() } }).then((r) => r.data)
+
+export const getBudgetByWindow = () =>
+  client.get<{ weeks: number; todayBudget: number | null }[]>('/stats/budget-by-window', { params: { today: today() } }).then((r) => r.data)

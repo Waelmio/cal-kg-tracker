@@ -150,7 +150,7 @@ export interface DashboardStats {
     weekly: { kcal: number; kg: number; expectedKcal: number | null; expectedKg: number | null; loggedDays: number }
     overall: { kcal: number; kg: number; gapKcal: number; loggedDays: number; totalDays: number; since: string; sinceGoalStart: boolean }
   }
-  weight: { kg: number | null; isAverage: boolean; date: string | null; paceKgPerWeek: number | null; paceWeighIns: number; bmi: number | null }
+  weight: { kg: number | null; isAverage: boolean; date: string | null; paceKgPerWeek: number | null; paceWeighIns: number; bmi: number | null; bmiAtGoal: number | null }
   goal: GoalStatus | null
   weightSeries: { date: string; kg: number; avg7: number }[]
   targetComparison: {

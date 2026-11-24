@@ -6,8 +6,10 @@
 
     <template v-if="data">
       <WeightGoalSection :dash="data.dash" :goals="data.goals" @changed="reload" @turn-off-target="turnOffTarget" />
-      <CalorieTargetSection :current="data.dash.calorieTarget" :comparison="data.dash.targetComparison" :goals="data.calorieGoals" @changed="reload" @turn-off="turnOffTarget" />
-      <TdeeSection :current="data.dash.tdee" @changed="reload" />
+      <div class="two">
+        <CalorieTargetSection :current="data.dash.calorieTarget" :comparison="data.dash.targetComparison" :goals="data.calorieGoals" @changed="reload" @turn-off="turnOffTarget" />
+        <TdeeSection :current="data.dash.tdee" @changed="reload" />
+      </div>
     </template>
   </main>
 </template>
@@ -38,7 +40,8 @@ async function turnOffTarget() {
 </script>
 
 <style scoped>
-.page { max-width: 760px; margin: 0 auto; padding: 20px 16px 24px; display: flex; flex-direction: column; gap: 24px; }
-h1 { margin: 0; font-size: 20px; }
+.page { max-width: 960px; margin: 0 auto; padding: 20px 16px 24px; display: flex; flex-direction: column; gap: 16px; color: #1f2937; font-variant-numeric: tabular-nums; }
+h1 { margin: 0; font-size: 20px; font-weight: 700; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 16px; align-items: start; }
 .muted { color: #4b5563; }
 </style>

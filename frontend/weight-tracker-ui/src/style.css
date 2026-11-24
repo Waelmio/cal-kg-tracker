@@ -31,7 +31,7 @@
 }
 
 @utility btn-primary {
-  @apply bg-primary-600 text-white font-medium text-sm px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+  @apply bg-primary-700 text-white font-semibold text-sm px-4 py-2 rounded-lg hover:bg-[#075985] transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
 }
 
 @utility btn-secondary {
@@ -52,3 +52,7 @@
 :where(button:disabled, select:disabled, input:disabled) {
   cursor: not-allowed;
 }
+
+/* Preflight strips heading weights; the design uses these. Components override with their own sizes. */
+h1 { font-weight: 700; }
+h2, h3 { font-weight: 600; }

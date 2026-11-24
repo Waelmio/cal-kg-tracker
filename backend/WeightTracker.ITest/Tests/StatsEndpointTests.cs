@@ -48,6 +48,14 @@ public abstract class StatsEndpointTestsBase
     }
 
     [Fact]
+    public async Task BudgetByWindow_ReturnsTodaysBudgetForEachWindow()
+    {
+        var client = await LoadFixtureAsync();
+        var r = await Get(client, $"/api/stats/budget-by-window?today={Today}");
+        Assert.Equal(new[] { 1877, 1881, 1786, 1605, 1483 }, r.EnumerateArray().Select(x => x.GetProperty("todayBudget").GetInt32()).ToArray());
+    }
+
+    [Fact]
     public async Task Dashboard_Figures()
     {
         var client = await LoadFixtureAsync();

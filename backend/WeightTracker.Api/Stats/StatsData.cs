@@ -22,4 +22,9 @@ public sealed class StatsData
     public IReadOnlyList<(DateOnly From, int Kcal)> Tdees { get; init; } = [];
 
     public GoalSpan? Goal { get; init; }
+
+    public StatsData WithWindow(int window) => new()
+    {
+        Today = Today, Window = window, Days = Days, Targets = Targets, Tdees = Tdees, Goal = Goal,
+    };
 }

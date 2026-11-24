@@ -36,32 +36,33 @@
     <div v-if="loading && !data" class="muted" aria-busy="true">Loading…</div>
 
     <section v-for="w in weeks" :key="w.monday" class="week">
-      <button type="button" class="wk-head" :aria-expanded="isOpen(w.monday)" @click="toggle(w.monday)">
-        <span class="wk-name"><span class="dot" :style="{ background: w.figures.status ? STATUS_COLORS[w.figures.status].solid : '#d1d5db' }" /> W{{ w.isoWeek }} <span class="muted">{{ shortDate(w.monday) }} – {{ shortDate(addDays(w.monday, 6)) }}</span></span>
-        <span><strong>{{ kcal(w.figures.avgCalories) }}</strong> <span class="muted">kcal average</span></span>
-        <span v-if="w.figures.loggedDays" :style="{ color: w.figures.gap > 0 ? '#c70036' : '#007a55' }">{{ signed(w.figures.gap) }} vs target</span><span v-else class="muted">no log</span>
-        <span v-if="w.figures.avgWeightKg != null"><strong>{{ weight(w.figures.avgWeightKg, app.unit) }}</strong> <span class="muted">{{ app.unit }} {{ weightChange(w.figures.weightChangeKg, app.unit) }}</span></span>
-        <span class="muted">{{ w.figures.loggedDays }} logged</span>
-        <span aria-hidden="true">{{ isOpen(w.monday) ? '▾' : '▸' }}</span>
+      <button type="button" class="wk-head" :style="{ background: tint(w.figures.status) }" :aria-expanded="isOpen(w.monday)" @click="toggle(w.monday)">
+        <span class="sw" :style="{ background: w.figures.status ? STATUS_COLORS[w.figures.status].solid : '#d1d5db' }" />
+        <span class="c1"><strong>W{{ w.isoWeek }}</strong> <span class="range">{{ shortDate(w.monday) }} to {{ addDays(w.monday, 6) >= app.today && w.monday <= app.today ? 'today' : shortDate(addDays(w.monday, 6)) }}</span></span>
+        <span class="c2"><strong>{{ kcal(w.figures.avgCalories) }}</strong> kcal average</span>
+        <span class="c3">{{ w.figures.loggedDays ? `${Math.abs(w.figures.gap)} ${w.figures.gap > 0 ? 'over' : 'under'}` : 'no log' }}</span>
+        <span class="c4"><template v-if="w.figures.avgWeightKg != null"><strong>{{ weight(w.figures.avgWeightKg, app.unit) }}</strong> {{ app.unit }} {{ weightChange(w.figures.weightChangeKg, app.unit) }}</template></span>
+        <span class="c5">{{ w.figures.loggedDays }} logged</span>
+        <span class="arrow" aria-hidden="true">{{ isOpen(w.monday) ? '▾' : '▸' }}</span>
       </button>
       <div v-if="isOpen(w.monday)" class="table-wrap">
         <table>
-          <thead><tr><th>Day</th><th>Calories</th><th>Against target</th><th>Weight</th><th>Note</th><th><span class="sr">Actions</span></th></tr></thead>
+          <thead><tr><th class="w1">Day</th><th class="w1">Calories</th><th class="w2">Against target</th><th class="w3">Weight</th><th>Note</th><th class="w4"><span class="sr">Actions</span></th></tr></thead>
           <tbody>
             <tr v-for="d in w.days" :key="d.date">
-              <td>{{ relativeDay(d.date, app.today) }}</td>
-              <td>{{ d.calories == null ? (d.planned != null ? `plan ${d.planned}` : '–') : d.calories }}<span v-if="d.isCheatDay" title="Cheat day"> ★</span></td>
-              <td :style="{ color: d.calories != null && d.target != null ? (d.calories > d.target ? '#c70036' : '#007a55') : undefined }">{{ d.calories != null && d.target != null ? signed(d.calories - d.target) : '' }}</td>
-              <td>{{ d.weightKg == null ? '–' : weight(d.weightKg, app.unit) }}</td>
-              <td class="note">{{ notes.get(d.date) ?? '' }}</td>
-              <td><button type="button" class="link" :aria-label="`${d.calories != null || d.weightKg != null ? 'Edit' : 'Log'} ${longDate(d.date)}`" @click="sheet.open(d.date)">{{ d.calories != null || d.weightKg != null ? 'Edit' : 'Log' }}</button></td>
+              <td class="day">{{ dayName(d.date) }}</td>
+              <td><span v-if="d.calories != null" class="chip" :style="chipStyle(d)">{{ d.calories }}</span><span v-else-if="d.planned != null" class="plan">plan {{ d.planned }}</span><span v-else class="plan">{{ d.date < app.today ? 'no log' : '' }}</span></td>
+              <td class="gray">{{ d.calories != null && d.target != null ? (d.calories <= d.target ? `${d.target - d.calories} under` : `${d.calories - d.target} over`) : '' }}</td>
+              <td>{{ d.weightKg == null ? '' : weight(d.weightKg, app.unit) + ' ' + app.unit }}</td>
+              <td class="gray">{{ [d.isCheatDay ? 'cheat day' : '', notes.get(d.date) ?? ''].filter(Boolean).join(', ') }}</td>
+              <td class="r"><button type="button" class="link" :aria-label="`${hasData(d) ? 'Edit' : 'Add'} ${longDate(d.date)}`" @click="sheet.open(d.date)">{{ hasData(d) ? 'Edit' : 'Add' }}</button></td>
             </tr>
           </tbody>
         </table>
       </div>
     </section>
 
-    <button type="button" class="btn-secondary more" @click="older += 8">Show older weeks</button>
+    <button type="button" class="more" @click="older += 8">Show older weeks</button>
   </main>
 </template>
 
@@ -74,15 +75,16 @@ import { useAsyncData } from '../composables/useAsyncData'
 import * as statsApi from '../api/stats'
 import * as logApi from '../api/dailyLog'
 import { addDays, mondayOf, monthOf, daysBetween } from '../utils/dates'
-import { kcal, longDate, relativeDay, shortDate, signed, STATUS_COLORS, weight, weightChange } from '../utils/format'
+import { CALENDAR_COLORS, kcal, longDate, shortDate, STATUS_COLORS, weekdayShort, weight, weightChange } from '../utils/format'
+import type { CalendarDay, Status } from '../types'
 import { displayWeight } from '../utils/units'
 import { niceTicks } from '../utils/chart'
 
 const app = useAppStore()
 const sheet = useLogSheetStore()
 
-const ranges = [{ label: '3 months', days: 91 }, { label: '6 months', days: 183 }, { label: 'All', days: 3650 }]
-const range = ref(183)
+const ranges = [{ label: '30 days', days: 30 }, { label: '90 days', days: 90 }, { label: 'All', days: 3650 }]
+const range = ref(90)
 const older = ref(0)             // extra weeks loaded with "Show older weeks"
 const jumpMonth = ref<string | null>(null)
 const opened = ref<Set<string>>(new Set())
@@ -106,6 +108,15 @@ const { data, loading, error, reload } = useAsyncData(async () => {
 const weightsFrom = computed(() => addDays(app.today, -range.value))
 const { data: weights, loading: loadingWeights } = useAsyncData(() => statsApi.getWeights(weightsFrom.value), [weightsFrom])
 const { data: dash } = useAsyncData(() => statsApi.getDashboard())
+
+const tint = (s: Status | null) => (s === 'under' ? '#ecfdf5' : s === 'balanced' ? '#fffbeb' : s === 'over' ? '#fff1f2' : '#ffffff')
+const dayName = (d: string) => `${weekdayShort(d)} ${shortDate(d)}`
+const hasData = (d: CalendarDay) => d.calories != null || d.weightKg != null
+function chipStyle(d: CalendarDay) {
+  if (!d.status) return { background: '#f3f4f6', color: '#4b5563' }
+  const [bg, fg] = CALENDAR_COLORS[d.inGoal ? 'day' : 'dayOut'][d.status]
+  return { background: bg, color: fg }
+}
 
 const notes = computed(() => new Map((data.value?.logs ?? []).filter((l) => l.notes).map((l) => [l.date, l.notes!])))
 
@@ -163,40 +174,46 @@ const chart = computed(() => {
 </script>
 
 <style scoped>
-.page { max-width: 960px; margin: 0 auto; padding: 20px 16px 24px; display: flex; flex-direction: column; gap: 16px; }
+.page { max-width: 960px; margin: 0 auto; padding: 20px 16px 24px; display: flex; flex-direction: column; gap: 16px; color: #1f2937; font-variant-numeric: tabular-nums; }
 .top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
-h1 { margin: 0; font-size: 20px; }
+h1 { margin: 0; font-size: 20px; font-weight: 700; }
 .jump { display: flex; align-items: center; gap: 8px; }
-.jump input { min-height: 44px; border: 1px solid #d1d5db; border-radius: 8px; padding: 0 10px; }
+.jump label { color: #4b5563; }
+.jump input { box-sizing: border-box; height: 44px; border: 1px solid #9ca3af; border-radius: 8px; padding: 0 12px; font: inherit; background: #fff; color: #1f2937; }
 .card, .week { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; }
+.week { overflow: hidden; }
 .card { padding: 18px; display: flex; flex-direction: column; gap: 12px; }
-.head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
-h2 { margin: 0; font-size: 16px; }
+.head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px 16px; }
+h2 { margin: 0; font-size: 16px; font-weight: 600; }
 .seg { display: flex; gap: 4px; }
-.seg button { min-height: 44px; padding: 0 14px; border: 1px solid #d1d5db; background: #fff; border-radius: 8px; cursor: pointer; }
+.seg button { min-height: 44px; padding: 0 14px; border: 1px solid #9ca3af; background: #fff; color: #374151; border-radius: 8px; font: inherit; font-weight: 600; }
 .seg button[aria-pressed='true'] { background: #0369a1; color: #fff; border-color: #0369a1; }
 .scroll { overflow-x: auto; }
 svg { display: block; width: 100%; min-width: 600px; height: auto; }
-.legend { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 13px; color: #4b5563; list-style: none; margin: 8px 0 0; padding: 0; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 13px; color: #4b5563; list-style: none; margin: 0; padding: 0; }
 .legend li { display: inline-flex; align-items: center; gap: 6px; }
-.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #9ca3af; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: #9ca3af; display: inline-block; }
 .ln { width: 18px; height: 2px; background: #0284c7; display: inline-block; }
-.gl { width: 14px; height: 10px; background: #e0f2fe; display: inline-block; }
+.gl { width: 14px; height: 12px; background: #e0f2fe; display: inline-block; }
 .muted { color: #4b5563; font-size: 13px; }
-.wk-head { all: unset; box-sizing: border-box; width: 100%; cursor: pointer; display: grid; grid-template-columns: minmax(150px, 1.4fr) repeat(4, minmax(0, 1fr)) 20px; gap: 8px 12px; align-items: center; padding: 12px 16px; min-height: 48px; }
-.wk-head:focus-visible { outline: 2px solid #0284c7; outline-offset: -2px; border-radius: 12px; }
-.wk-name { font-weight: 600; }
-.table-wrap { overflow-x: auto; padding: 0 16px 12px; }
-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-th { text-align: left; font-size: 13px; font-weight: 600; color: #4b5563; padding: 6px 8px; border-bottom: 1px solid #e5e7eb; white-space: nowrap; }
-td { padding: 8px; border-bottom: 1px solid #f3f4f6; }
-td.note { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #4b5563; }
-.link { all: unset; cursor: pointer; color: #0369a1; font-weight: 600; min-height: 44px; display: inline-flex; align-items: center; padding: 0 8px; }
+.wk-head { width: 100%; min-height: 60px; border: 0; color: #1f2937; font: inherit; padding: 10px 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; text-align: left; }
+.wk-head:focus-visible { outline: 2px solid #0284c7; outline-offset: -2px; }
+.sw { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+.c1 { flex: 1 1 170px; } .c2 { flex: 0 1 170px; white-space: nowrap; } .c3 { flex: 0 1 110px; } .c4 { flex: 0 1 140px; white-space: nowrap; } .c5 { flex: 0 1 90px; white-space: nowrap; }
+.range { color: #374151; }
+.arrow { width: 16px; text-align: center; }
+.table-wrap { overflow-x: auto; padding: 0 18px 8px; }
+table { width: 100%; min-width: 620px; border-collapse: collapse; text-align: left; table-layout: fixed; }
+th { text-align: left; white-space: nowrap; }
+th { padding: 8px 0; font-weight: 600; font-size: 13px; color: #4b5563; }
+.w1 { width: 120px; } .w2 { width: 130px; } .w3 { width: 100px; } .w4 { width: 70px; }
+td { padding: 4px 0; border-top: 1px solid #f3f4f6; }
+td.day { font-weight: 600; }
+td.gray, .plan { color: #4b5563; }
+td.r { text-align: right; }
+.chip { display: inline-block; min-width: 44px; text-align: center; padding: 3px 8px; border-radius: 6px; font-weight: 600; }
+.link { display: inline-flex; align-items: center; min-height: 44px; padding: 0 6px; background: none; border: 0; font: inherit; font-weight: 600; color: #0369a1; }
 .link:focus-visible { outline: 2px solid #0284c7; }
-.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-.more { align-self: center; min-height: 44px; }
-@media (max-width: 639px) {
-  .wk-head { grid-template-columns: 1fr 20px; }
-  .wk-head > span:not(.wk-name):not([aria-hidden]) { grid-column: 1 / -1; }
-}
+.sr { position: absolute; left: -9999px; }
+.more { align-self: center; min-height: 44px; padding: 0 20px; border: 1px solid #9ca3af; border-radius: 8px; background: #fff; color: #1f2937; font: inherit; font-weight: 600; }
 </style>

@@ -44,6 +44,10 @@ public class StatsController(IStatsService stats) : ControllerBase
     public async Task<ActionResult<List<WeightPointDto>>> Weights([FromQuery] DateOnly from, [FromQuery] DateOnly? today = null)
         => today is null ? NoToday() : Ok(await stats.WeightsAsync(from, today.Value));
 
+    [HttpGet("budget-by-window")]
+    public async Task<ActionResult<List<BudgetByWindowDto>>> BudgetByWindow([FromQuery] DateOnly? today = null)
+        => today is null ? NoToday() : Ok(await stats.BudgetByWindowAsync(today.Value));
+
     [HttpGet("tdee")]
     public async Task<ActionResult<TdeeStatsDto>> Tdee([FromQuery] int days = 90, [FromQuery] DateOnly? today = null)
     {

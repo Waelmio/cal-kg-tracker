@@ -1,49 +1,43 @@
 <template>
-  <section class="sec" aria-labelledby="td-h">
-    <h2 id="td-h">TDEE, what you burn</h2>
-    <div class="card">
-      <p class="big">{{ current ?? '–' }} <span class="unit">kcal a day</span></p>
-      <form class="row" @submit.prevent="saveHand">
-        <div class="f">
-          <label for="td">Set by hand</label>
-          <input id="td" v-model="handInput" class="input" inputmode="numeric" placeholder="kcal a day" />
-        </div>
-        <button type="submit" class="btn-primary" :disabled="busy || !/^\d{3,5}$/.test(handInput.trim())">Save</button>
-      </form>
-      <p class="hint">A new value counts from today. Past days keep the TDEE that was in force.</p>
+  <section class="panel" aria-labelledby="td-h">
+    <div>
+      <h2 id="td-h">TDEE, what you burn</h2>
+      <div class="big">{{ current ?? '–' }} <span class="by">kcal a day</span></div>
+    </div>
 
-      <h3>Estimated from your logs</h3>
-      <div class="seg" role="group" aria-label="Period">
+    <form class="form" @submit.prevent="saveHand">
+      <div class="f"><label for="td">Set by hand</label><input id="td" v-model="handInput" inputmode="numeric" :placeholder="current != null ? String(current) : 'kcal a day'" /></div>
+      <button type="submit" class="go" :disabled="busy || !/^\d{3,5}$/.test(handInput.trim())">Save</button>
+    </form>
+    <p v-if="actionError" role="alert" class="error">{{ actionError }}</p>
+
+    <div class="box">
+      <div class="est-head"><span class="b">Estimated from your logs</span><span class="est">{{ data?.estimate?.kcal ?? '' }}</span></div>
+      <div class="periods">
         <button v-for="p in [30, 60, 90]" :key="p" type="button" :aria-pressed="days === p" @click="days = p as 30 | 60 | 90">{{ p }} days</button>
       </div>
 
       <ErrorNote v-if="error" :message="error" :retry="reload" />
       <p v-else-if="loading && !data" class="hint" aria-busy="true">Loading…</p>
       <template v-else-if="data">
-        <p v-if="data.note" class="note"><strong>Quick estimate.</strong> Can be off by 300 kcal or more.</p>
+        <div v-if="data.note" class="quick"><strong>Quick estimate.</strong> Can be off by 300 kcal or more.</div>
+        <p v-if="data.suggestUpdate" class="suggest">This differs from your current TDEE by more than 100 kcal.</p>
 
         <template v-if="data.estimate">
-          <p class="big est">{{ data.estimate.kcal }} <span class="unit">kcal a day</span></p>
-          <p v-if="data.suggestUpdate" class="suggest">This differs from your current TDEE by more than 100 kcal.</p>
-          <dl class="rows">
-            <div v-for="r in estimateRows" :key="r.label" class="r">
-              <dt><InfoTip :label="r.label" :text="r.tip" /></dt><dd>{{ r.value }}</dd>
-            </div>
-          </dl>
-          <div><button type="button" class="btn-secondary" :disabled="busy" @click="useEstimate">Use {{ data.estimate.kcal }}</button></div>
+          <div v-for="r in estimateRows" :key="r.label" class="r"><InfoTip :label="r.label" :text="r.tip" /><span>{{ r.value }}</span></div>
+          <button type="button" class="use" :disabled="busy" @click="useEstimate">Use {{ data.estimate.kcal }}</button>
         </template>
-        <p v-else class="missing">{{ data.missing }}</p>
-
-        <template v-if="data.diet">
-          <h3>What the diet changed, about</h3>
-          <dl class="rows">
-            <div v-for="r in data.diet.rows" :key="r.key" class="r">
-              <dt><InfoTip :label="r.label" :text="dietTip(r.key, r.label)" /></dt><dd>{{ r.kcal > 0 && r.key !== 'before' && r.key !== 'now' && r.key !== 'keep' ? '+' : '' }}{{ r.kcal < 0 ? '−' + Math.abs(r.kcal) : r.kcal }}</dd>
-            </div>
-          </dl>
-          <p class="hint">{{ data.diet.footer }}</p>
-        </template>
+        <p v-else class="hint">{{ data.missing }}</p>
       </template>
+    </div>
+
+    <div v-if="data?.diet" class="diet">
+      <h3>What the diet changed, about</h3>
+      <div v-for="r in data.diet.rows" :key="r.key" class="r" :class="{ line: r.key === 'now' }">
+        <InfoTip :text="dietTip(r.key, r.label)"><span :class="{ strong: ['before', 'now', 'keep'].includes(r.key) }">{{ r.label }}</span></InfoTip>
+        <span :class="{ strong: ['before', 'now'].includes(r.key), keep: r.key === 'keep' }">{{ r.kcal < 0 ? '−' + Math.abs(r.kcal) : r.kcal }}</span>
+      </div>
+      <p class="hint">{{ data.diet.footer }}</p>
     </div>
   </section>
 </template>
@@ -74,12 +68,11 @@ const estimateRows = computed(() => {
   if (!e) return []
   const g = e.weightTrendGramsPerDay
   return [
-    { label: 'TDEE', value: `${e.kcal} kcal`, tip: 'Calories you burn in a day.' },
-    { label: 'Average eaten', value: `${e.avgCalories} kcal`, tip: 'Average of logged days in the period.' },
-    { label: 'Weight trend', value: `${g > 0 ? '+' : g < 0 ? '−' : ''}${Math.abs(g).toFixed(1)} g a day`, tip: 'Slope of a straight line through all weigh-ins.' },
-    { label: 'Adjusted for weight lost', value: `${e.adjustment >= 0 ? '+' : '−'}${Math.abs(e.adjustment)} kcal`, tip: 'You burn about 17 kcal less per kg lost (Hall et al. 2011). This moves the period average to your weight now.' },
+    { label: 'Average eaten', value: String(e.avgCalories), tip: 'Average of logged days in the period.' },
+    { label: 'Weight trend', value: `${g < 0 ? '▼' : g > 0 ? '▲' : ''} ${Math.abs(g).toFixed(0)} g a day`, tip: 'Slope of a straight line through all weigh-ins.' },
+    { label: 'Adjusted for weight lost', value: `${e.adjustment >= 0 ? '+' : '−'}${Math.abs(e.adjustment)}`, tip: 'You burn about 17 kcal less per kg lost (Hall et al. 2011). This moves the period average to your weight now.' },
     { label: 'Based on', value: `${e.weighIns} weigh-ins, ${e.loggedDays} / ${e.spanDays} days logged`, tip: 'More weigh-ins and logged days give a better estimate.' },
-    { label: 'Period', value: `${shortDate(e.first)} to ${shortDate(e.last)}`, tip: 'From your first to last weigh-in in the period.' },
+    { label: 'Period', value: `${shortDate(e.first)} to ${shortDate(e.last, true)}`, tip: 'From your first to last weigh-in in the period.' },
   ]
 })
 
@@ -114,27 +107,34 @@ const useEstimate = () => data.value?.estimate && add(data.value.estimate.kcal, 
 </script>
 
 <style scoped>
-.sec { display: flex; flex-direction: column; gap: 12px; border-left: 4px solid #7c3aed; padding-left: 14px; }
-h2 { margin: 0; font-size: 18px; color: #5b21b6; }
-h3 { margin: 6px 0 0; font-size: 15px; }
-.card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
-.big { margin: 0; font-size: 28px; font-weight: 700; }
-.big.est { font-size: 24px; }
-.unit { font-size: 14px; font-weight: 400; color: #4b5563; }
-.row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
-.f { display: flex; flex-direction: column; gap: 4px; }
+.panel { background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+h2 { margin: 0; font-size: 14px; font-weight: 600; color: #5b21b6; }
+h3 { margin: 0; font-size: 14px; font-weight: 600; color: #5b21b6; }
+.big { font-size: 30px; font-weight: 700; line-height: 1.2; }
+.by { font-size: 15px; font-weight: 400; color: #374151; }
+.form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; }
+.f { display: flex; flex-direction: column; gap: 6px; }
 label { font-weight: 600; }
-.input { min-height: 44px; width: 160px; }
-.row button, .card > div > button { min-height: 44px; }
-.hint { margin: 0; color: #4b5563; font-size: 13px; }
-.seg { display: flex; gap: 4px; }
-.seg button { min-height: 44px; padding: 0 14px; border: 1px solid #d1d5db; background: #fff; border-radius: 8px; cursor: pointer; }
-.seg button[aria-pressed='true'] { background: #7c3aed; color: #fff; border-color: #7c3aed; }
-.note { margin: 0; background: #fef3c6; color: #973c00; padding: 8px 12px; border-radius: 8px; }
+input { box-sizing: border-box; width: 100%; height: 46px; border: 1px solid #9ca3af; border-radius: 8px; padding: 0 12px; font: inherit; font-weight: 600; }
+.go { min-height: 46px; padding: 0 18px; border: 0; border-radius: 8px; background: #6d28d9; color: #fff; font: inherit; font-weight: 600; }
+.go:disabled { opacity: 0.5; }
+.box { background: #fff; border: 1px solid #ddd6fe; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 6px; }
+.est-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.b { font-weight: 600; }
+.est { font-size: 20px; font-weight: 700; color: #5b21b6; }
+.periods { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.periods button { min-height: 44px; border-radius: 8px; border: 1px solid #c4b5fd; background: #fff; color: #5b21b6; font: inherit; font-weight: 600; }
+.periods button[aria-pressed='true'] { background: #6d28d9; border-color: #6d28d9; color: #fff; }
+.quick { background: #fef3c6; color: #973c00; border-radius: 8px; padding: 10px 12px; }
 .suggest { margin: 0; color: #5b21b6; }
-.missing { margin: 0; color: #4b5563; }
-.rows { margin: 0; display: flex; flex-direction: column; gap: 4px; }
-.r { display: flex; justify-content: space-between; gap: 12px; }
-dt { color: #4b5563; }
-dd { margin: 0; font-weight: 600; text-align: right; }
+.r { display: flex; justify-content: space-between; gap: 12px; align-items: center; color: #4b5563; }
+.r span:last-child, .r > span { color: #1f2937; }
+.r.line { border-top: 1px solid #ddd6fe; padding-top: 6px; }
+.strong { font-weight: 600; color: #1f2937; }
+.keep { font-weight: 700; color: #5b21b6; }
+.use { margin-top: 6px; min-height: 44px; border: 1px solid #c4b5fd; border-radius: 8px; background: #f5f3ff; color: #5b21b6; font: inherit; font-weight: 600; }
+.diet { display: flex; flex-direction: column; gap: 6px; }
+.hint { margin: 0; font-size: 13px; color: #4b5563; }
+.error { margin: 0; color: #a50036; background: #ffe4e6; padding: 10px 12px; border-radius: 8px; }
+button:focus-visible, input:focus-visible { outline: 2px solid #0284c7; outline-offset: 2px; }
 </style>

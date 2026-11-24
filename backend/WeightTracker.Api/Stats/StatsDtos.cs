@@ -44,7 +44,8 @@ public record WeightDto(
     string? Date,
     double? PaceKgPerWeek,
     int PaceWeighIns,
-    double? Bmi);
+    double? Bmi,
+    double? BmiAtGoal);
 
 public record DashboardStatsDto(
     string Today,
@@ -72,6 +73,8 @@ public record TargetComparisonDto(
 
 /// <summary>A weigh-in with the 7-day average ending that day. Starts at the goal's start date (else 90 days back).</summary>
 public record WeightPointDto(string Date, double Kg, double Avg7);
+
+public record BudgetByWindowDto(int Weeks, int? TodayBudget);
 
 public record CalendarDayDto(
     string Date,
