@@ -25,7 +25,6 @@ public abstract class SettingsEndpointTestsBase
         Assert.NotNull(settings);
         Assert.Equal("kg", settings.PreferredUnit);
         Assert.Null(settings.HeightCm);
-        Assert.Null(settings.TdeeKcal);
     }
 
     [Fact]
@@ -33,7 +32,7 @@ public abstract class SettingsEndpointTestsBase
     {
         await ResetAsync();
 
-        var body = new { HeightCm = 175, PreferredUnit = "lbs", TdeeKcal = 2200 };
+        var body = new { HeightCm = 175, PreferredUnit = "lbs" };
         var response = await Client.PutAsJsonAsync("/api/settings", body);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -41,7 +40,6 @@ public abstract class SettingsEndpointTestsBase
         Assert.NotNull(settings);
         Assert.Equal(175, settings.HeightCm);
         Assert.Equal("lbs", settings.PreferredUnit);
-        Assert.Equal(2200, settings.TdeeKcal);
     }
 
     [Fact]
@@ -49,7 +47,7 @@ public abstract class SettingsEndpointTestsBase
     {
         await ResetAsync();
 
-        await Client.PutAsJsonAsync("/api/settings", new { HeightCm = 180, PreferredUnit = "kg", TdeeKcal = (int?)null });
+        await Client.PutAsJsonAsync("/api/settings", new { HeightCm = 180, PreferredUnit = "kg" });
         var settings = await Client.GetFromJsonAsync<UserSettingsDto>("/api/settings");
 
         Assert.NotNull(settings);
@@ -62,7 +60,7 @@ public abstract class SettingsEndpointTestsBase
     {
         await ResetAsync();
 
-        var response = await Client.PutAsJsonAsync("/api/settings", new { HeightCm = (int?)null, PreferredUnit = "stones", TdeeKcal = (int?)null });
+        var response = await Client.PutAsJsonAsync("/api/settings", new { HeightCm = (int?)null, PreferredUnit = "stones" });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }

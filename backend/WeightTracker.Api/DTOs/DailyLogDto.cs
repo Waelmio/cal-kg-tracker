@@ -8,7 +8,6 @@ public record DailyLogDto(
     decimal? WeightKg,
     int? CaloriesKcal,
     string? Notes,
-    int? CalorieTarget,
     bool IsCheatDay,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,

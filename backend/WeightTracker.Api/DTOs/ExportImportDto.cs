@@ -9,9 +9,16 @@ public record CreateTdeeEntryDto(
     DateOnly? EffectiveFrom = null,
     TdeeSource? Source = null);
 
+/// <param name="TdeeKcal">Only in exports from before the redesign, which had a single TDEE instead of a history.</param>
+public record ExportSettingsDto(
+    int? HeightCm,
+    string PreferredUnit,
+    int AveragingWeeks = 2,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? TdeeKcal = null);
+
 /// <summary>Export format. <c>Version</c> is 2 from the redesign on; absent (null) in older exports.</summary>
 public record ExportImportDto(
-    UserSettingsDto Settings,
+    ExportSettingsDto Settings,
     List<DailyLogDto> DailyLogs,
     List<GoalDto> Goals,
     List<CalorieGoalDto> CalorieGoals,

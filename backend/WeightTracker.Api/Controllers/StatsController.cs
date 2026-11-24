@@ -18,9 +18,14 @@ public class StatsController(IStatsService stats) : ControllerBase
     {
         if (today is null) return NoToday();
         if (to < from) return Problem(title: "'to' must not be before 'from'.", statusCode: 400);
-        if (to.DayNumber - from.DayNumber > 400) return Problem(title: "The range is limited to 400 days.", statusCode: 400);
+        if (to.DayNumber - from.DayNumber > 3700) return Problem(title: "The range is limited to ten years.", statusCode: 400);
         return Ok(await stats.CalendarAsync(from, to, today.Value));
     }
+
+    /// <summary>The week around a date, for the log sheet.</summary>
+    [HttpGet("log-week")]
+    public async Task<ActionResult<LogWeekDto>> LogWeek([FromQuery] DateOnly date, [FromQuery] DateOnly? today)
+        => today is null ? NoToday() : Ok(await stats.LogWeekAsync(date, today.Value));
 
     [HttpGet("periods")]
     public async Task<ActionResult<List<PeriodDto>>> Periods([FromQuery] string unit = "week", [FromQuery] int count = 12, [FromQuery] DateOnly? today = null)

@@ -170,9 +170,6 @@ namespace WeightTracker.Api.Migrations.Sqlite
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<int?>("TdeeKcal")
-                        .HasColumnType("INTEGER");
-
                     b.HasKey("Id");
 
                     b.ToTable("UserSettings");

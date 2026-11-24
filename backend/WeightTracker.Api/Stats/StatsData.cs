@@ -1,6 +1,6 @@
 namespace WeightTracker.Api.Stats;
 
-public sealed record DayData(DateOnly Date, double? WeightKg, int? Calories, DateOnly? CaloriesSetOn, bool IsCheatDay, bool HasNote);
+public sealed record DayData(DateOnly Date, double? WeightKg, int? Calories, DateOnly? CaloriesSetOn, bool IsCheatDay, string? Notes = null);
 
 /// <summary>The goal's span on the calendar, used only for the "lighter shade" outside the goal.</summary>
 public sealed record GoalSpan(DateOnly Start, DateOnly? End);

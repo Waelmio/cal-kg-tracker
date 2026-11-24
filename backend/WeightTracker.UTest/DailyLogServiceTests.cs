@@ -16,7 +16,7 @@ public class DailyLogServiceTests
         return new AppDbContext(options);
     }
 
-    private static DailyLogService CreateService(AppDbContext db) => new(db, new CalorieLogService(db));
+    private static DailyLogService CreateService(AppDbContext db) => new(db);
 
     private static UpsertDailyLogDto Put(string date, decimal? kg = null, int? kcal = null, string? notes = null, bool cheat = false) =>
         new(date, kg, kcal, notes, cheat);
@@ -214,18 +214,6 @@ public class DailyLogServiceTests
 
         Assert.Equal(81.23m, saved.WeightKg);
         Assert.Equal(1800, saved.CaloriesKcal);
-    }
-
-    // ── Targets on the DTO ────────────────────────────────────────────────────
-
-    [Fact]
-    public async Task Dto_CarriesTheTargetInForceThatDay()
-    {
-        using var db = CreateDb();
-        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 1900, EffectiveFrom = new DateOnly(2024, 1, 1) });
-        await db.SaveChangesAsync();
-        var saved = await CreateService(db).UpsertAsync(Put("2024-03-01", kcal: 2000), Today);
-        Assert.Equal(1900, saved!.CalorieTarget);
     }
 
     [Fact]

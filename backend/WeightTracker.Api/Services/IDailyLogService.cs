@@ -11,7 +11,7 @@ public interface IDailyLogService
     /// Replaces the whole day. Returns null when nothing is left (no weight, calories, note or cheat mark),
     /// in which case the row is removed.
     /// </summary>
-    Task<DailyLogDto?> UpsertAsync(UpsertDailyLogDto dto, DateOnly? today = null);
+    Task<DailyLogDto?> UpsertAsync(UpsertDailyLogDto dto, DateOnly today);
 
     /// <summary>Delete entry: removes the day with everything in it, note and cheat mark included.</summary>
     Task<bool> DeleteDayAsync(DateOnly date);

@@ -5,7 +5,7 @@ using WeightTracker.Api.Models;
 
 namespace WeightTracker.Api.Services;
 
-public class DailyLogService(AppDbContext db, ICalorieLogService calorieLogService) : IDailyLogService
+public class DailyLogService(AppDbContext db) : IDailyLogService
 {
     public async Task<List<DailyLogDto>> GetAllAsync(DateOnly? from, DateOnly? to, int? limit)
     {
@@ -15,23 +15,18 @@ public class DailyLogService(AppDbContext db, ICalorieLogService calorieLogServi
         query = query.OrderByDescending(l => l.Date);
         if (limit.HasValue) query = query.Take(limit.Value);
 
-        var logs = await query.ToListAsync();
-        var enriched = await calorieLogService.EnrichLogsAsync(logs);
-        return enriched.Select(e => ToDto(e.Log, e.EffectiveTarget)).ToList();
+        return (await query.ToListAsync()).Select(ToDto).ToList();
     }
 
     public async Task<DailyLogDto?> GetByDateAsync(DateOnly date)
     {
         var log = await db.DailyLogs.FirstOrDefaultAsync(l => l.Date == date);
-        if (log is null) return null;
-        var target = await calorieLogService.GetEffectiveTargetAsync(date, log.IsCheatDay);
-        return ToDto(log, target);
+        return log is null ? null : ToDto(log);
     }
 
-    public async Task<DailyLogDto?> UpsertAsync(UpsertDailyLogDto dto, DateOnly? todayOrNull = null)
+    public async Task<DailyLogDto?> UpsertAsync(UpsertDailyLogDto dto, DateOnly today)
     {
         var date = DateOnly.Parse(dto.Date);
-        var today = todayOrNull ?? DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime);
         var log = await db.DailyLogs.FirstOrDefaultAsync(l => l.Date == date);
 
         var notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
@@ -64,8 +59,7 @@ public class DailyLogService(AppDbContext db, ICalorieLogService calorieLogServi
         log.UpdatedAt = DateTimeOffset.UtcNow;
 
         await db.SaveChangesAsync();
-        var target = await calorieLogService.GetEffectiveTargetAsync(date, log.IsCheatDay);
-        return ToDto(log, target);
+        return ToDto(log);
     }
 
     public async Task<bool> DeleteDayAsync(DateOnly date)
@@ -84,7 +78,7 @@ public class DailyLogService(AppDbContext db, ICalorieLogService calorieLogServi
         log.CaloriesKcal = kcal;
         log.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync();
-        return ToDto(log, await calorieLogService.GetEffectiveTargetAsync(date, log.IsCheatDay));
+        return ToDto(log);
     }
 
     public async Task<DailyLogDto> SetWeightAsync(DateOnly date, decimal kg)
@@ -93,7 +87,7 @@ public class DailyLogService(AppDbContext db, ICalorieLogService calorieLogServi
         log.WeightKg = Math.Round(kg, 2);
         log.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync();
-        return ToDto(log, await calorieLogService.GetEffectiveTargetAsync(date, log.IsCheatDay));
+        return ToDto(log);
     }
 
     private async Task<DailyLog> GetOrAddAsync(DateOnly date)
@@ -107,6 +101,6 @@ public class DailyLogService(AppDbContext db, ICalorieLogService calorieLogServi
         return log;
     }
 
-    private static DailyLogDto ToDto(DailyLog l, int? calorieTarget) =>
-        new(l.Id, l.Date.ToString("yyyy-MM-dd"), l.WeightKg, l.CaloriesKcal, l.Notes, calorieTarget, l.IsCheatDay, l.CreatedAt, l.UpdatedAt, l.CaloriesSetOn);
+    private static DailyLogDto ToDto(DailyLog l) =>
+        new(l.Id, l.Date.ToString("yyyy-MM-dd"), l.WeightKg, l.CaloriesKcal, l.Notes, l.IsCheatDay, l.CreatedAt, l.UpdatedAt, l.CaloriesSetOn);
 }

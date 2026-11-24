@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using WeightTracker.Api.DTOs;
 using WeightTracker.Api.Services;
 
@@ -24,9 +25,8 @@ public class DailyLogController(IDailyLogService service) : ControllerBase
 
     /// <summary>Full replace of the day. <c>today</c> is the client's local date.</summary>
     [HttpPut("{date}")]
-    public async Task<ActionResult<DailyLogDto>> Upsert(DateOnly date, [FromBody] UpsertDailyLogDto dto, [FromQuery] DateOnly? today = null)
+    public async Task<ActionResult<DailyLogDto>> Upsert(DateOnly date, [FromBody] UpsertDailyLogDto dto, [FromQuery, BindRequired] DateOnly today)
     {
-        if (today is null) return Problem(title: "today is required (yyyy-MM-dd, the client's local date).", statusCode: 400);
         var normalized = dto with { Date = date.ToString("yyyy-MM-dd") };
         var saved = await service.UpsertAsync(normalized, today);
         return saved is null ? NoContent() : Ok(saved);

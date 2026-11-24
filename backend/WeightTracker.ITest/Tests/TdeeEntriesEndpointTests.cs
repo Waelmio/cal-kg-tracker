@@ -27,7 +27,28 @@ public abstract class TdeeEntriesEndpointTestsBase
         Assert.Equal(2450, all[0].Kcal);                        // newest first
         Assert.Equal(new DateOnly(2026, 6, 1), all[0].EffectiveFrom);
         Assert.Equal(2300, all[1].Kcal);
-        Assert.Equal(2450, (await client.GetFromJsonAsync<UserSettingsDto>("/api/settings"))!.TdeeKcal);
+    }
+
+    [Fact]
+    public async Task TheFirstEntry_CoversTheDaysLoggedBeforeIt_LaterOnesDont()
+    {
+        var client = await ResetAsync();
+        await client.PutAsJsonAsync("/api/daily-logs/2026-03-10?today=2026-03-10", new { date = "2026-03-10", caloriesKcal = 2000 });
+        await client.PostAsJsonAsync("/api/tdee-entries?today=2026-06-01", new { kcal = 2300 });
+        await client.PostAsJsonAsync("/api/tdee-entries?today=2026-07-01", new { kcal = 2400 });
+
+        var all = await client.GetFromJsonAsync<List<TdeeEntryDto>>("/api/tdee-entries");
+        Assert.Equal(new[] { new DateOnly(2026, 7, 1), new DateOnly(2026, 3, 10) }, all!.Select(t => t.EffectiveFrom));
+    }
+
+    [Fact]
+    public async Task Delete_RemovesTheEntry()
+    {
+        var client = await ResetAsync();
+        var created = await (await client.PostAsJsonAsync("/api/tdee-entries?today=2026-06-01", new { kcal = 2400 })).Content.ReadFromJsonAsync<TdeeEntryDto>();
+        Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/api/tdee-entries/{created!.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.DeleteAsync($"/api/tdee-entries/{created.Id}")).StatusCode);
+        Assert.Empty((await client.GetFromJsonAsync<List<TdeeEntryDto>>("/api/tdee-entries"))!);
     }
 
     [Fact]

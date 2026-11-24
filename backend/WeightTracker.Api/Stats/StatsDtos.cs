@@ -26,6 +26,7 @@ public record BudgetDto(
     int? AvgTargetSoFar,
     int ExpectedAverage,
     int? ExpectedDeficitKcal,
+    bool ReachesTarget,      // false when even the plan leaves the averaging window over target
     List<PlannedDayDto> Days,
     List<PlannedDayDto> FutureDays);
 
@@ -87,7 +88,28 @@ public record CalendarDayDto(
     bool InGoal,
     double? WeightKg,
     bool IsCheatDay,
-    bool HasNote);
+    string? Notes);
+
+/// <summary>One day as the log sheet edits it. Everything the sheet shows for a week comes in one response.</summary>
+/// <param name="CalorieTarget">The calorie target in force, whether or not the day is a cheat day.</param>
+/// <param name="LastWeightKg">The latest weigh-in before this day, however long ago.</param>
+public record LogDayDto(
+    string Date,
+    int? Calories,
+    double? WeightKg,
+    string? Notes,
+    bool IsCheatDay,
+    string? Status,
+    int? Planned,
+    int? CalorieTarget,
+    int? Tdee,
+    double? LastWeightKg);
+
+/// <summary>What today's free days share, so the sheet can show the effect of a value while it is typed.</summary>
+/// <param name="Pool">Kcal left for today and the other free days of this week.</param>
+public record WeekPoolDto(int TodayBudget, int Pool, int OtherDays);
+
+public record LogWeekDto(string Monday, List<LogDayDto> Days, WeekPoolDto? ThisWeek);
 
 public record CalendarWeekDto(string Monday, int IsoWeek, int IsoYear, PeriodDto Figures);
 

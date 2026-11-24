@@ -19,14 +19,13 @@ public class CalorieGoalService(AppDbContext db) : ICalorieGoalService
         return goal is null ? null : ToDto(goal);
     }
 
-    public async Task<CalorieGoalDto> CreateAsync(CreateCalorieGoalDto dto, DateOnly? today = null)
+    public async Task<CalorieGoalDto> CreateAsync(CreateCalorieGoalDto dto, DateOnly today)
     {
-        var from = today ?? DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime);
         // One entry per effective day: a second change on the same day replaces the first.
-        var existing = await db.CalorieGoals.Where(g => g.EffectiveFrom == from).ToListAsync();
+        var existing = await db.CalorieGoals.Where(g => g.EffectiveFrom == today).ToListAsync();
         db.CalorieGoals.RemoveRange(existing);
 
-        var goal = new CalorieGoal { TargetCalories = dto.TargetCalories, EffectiveFrom = from };
+        var goal = new CalorieGoal { TargetCalories = dto.TargetCalories, EffectiveFrom = today };
         db.CalorieGoals.Add(goal);
         await db.SaveChangesAsync();
         return ToDto(goal);

@@ -20,7 +20,7 @@ public abstract class StatsEndpointTestsBase
         response.EnsureSuccessStatusCode();
         if (averagingWeeks is not null)
         {
-            var r = await client.PutAsJsonAsync("/api/settings", new { heightCm = 178, preferredUnit = "kg", tdeeKcal = 2350, averagingWeeks });
+            var r = await client.PutAsJsonAsync("/api/settings", new { heightCm = 178, preferredUnit = "kg", averagingWeeks });
             r.EnsureSuccessStatusCode();
         }
         return client;
@@ -53,6 +53,88 @@ public abstract class StatsEndpointTestsBase
         var client = await LoadFixtureAsync();
         var r = await Get(client, $"/api/stats/budget-by-window?today={Today}");
         Assert.Equal(new[] { 1877, 1881, 1786, 1605, 1483 }, r.EnumerateArray().Select(x => x.GetProperty("todayBudget").GetInt32()).ToArray());
+    }
+
+    [Fact]
+    public async Task ADayNobodyLoggedThisWeek_IsLeftOutOfTheExpectedFigures()
+    {
+        var client = await LoadFixtureAsync();
+        (await client.DeleteAsync("/api/daily-logs/2026-11-23")).EnsureSuccessStatusCode();
+        var b = (await Get(client, $"/api/stats/dashboard?today={Today}")).GetProperty("budget");
+        var days = b.GetProperty("days").EnumerateArray().Select(d => d.GetProperty("kcal").GetInt32()).ToList();
+        Assert.Equal(6, days.Count);
+        Assert.Equal((int)Math.Round(days.Average(), MidpointRounding.AwayFromZero), b.GetProperty("expectedAverage").GetInt32());
+        Assert.Equal(6 * 2350 - days.Sum(), b.GetProperty("expectedDeficitKcal").GetInt32());
+    }
+
+    [Fact]
+    public async Task LogWeek_HasEverythingTheSheetNeeds()
+    {
+        var client = await LoadFixtureAsync();
+        await client.PutAsJsonAsync($"/api/daily-logs/2026-11-25?today={Today}", new { date = "2026-11-25", notes = "dinner out", isCheatDay = true });
+        var w = await Get(client, $"/api/stats/log-week?date=2026-11-24&today={Today}");
+
+        Assert.Equal("2026-11-23", w.GetProperty("monday").GetString());
+        var days = w.GetProperty("days").EnumerateArray().ToList();
+        Assert.Equal(7, days.Count);
+        Assert.Equal(1689, days[0].GetProperty("calories").GetInt32());
+        Assert.Equal("under", days[0].GetProperty("status").GetString());
+        Assert.Equal("dinner out", days[2].GetProperty("notes").GetString());
+        Assert.True(days[2].GetProperty("isCheatDay").GetBoolean());
+        Assert.Equal(1850, days[2].GetProperty("calorieTarget").GetInt32());   // the plain target, the sheet toggles cheat itself
+        Assert.Equal(2350, days[2].GetProperty("tdee").GetInt32());
+        Assert.Equal(83.8, days[6].GetProperty("lastWeightKg").GetDouble());
+        Assert.Equal(days[1].GetProperty("planned").GetInt32(), w.GetProperty("thisWeek").GetProperty("todayBudget").GetInt32());
+        Assert.Equal(5, w.GetProperty("thisWeek").GetProperty("otherDays").GetInt32());
+
+        // Another week has no pool to share, and a day far in the future still knows the last weight.
+        var later = await Get(client, $"/api/stats/log-week?date=2028-01-01&today={Today}");
+        Assert.Equal(JsonValueKind.Null, later.GetProperty("thisWeek").ValueKind);
+        Assert.Equal(83.8, later.GetProperty("days")[0].GetProperty("lastWeightKg").GetDouble());
+    }
+
+    [Fact]
+    public async Task ThePool_DoesNotDependOnWhatIsEatenToday()
+    {
+        var client = await LoadFixtureAsync();
+        async Task<int> Pool(int kcal)
+        {
+            await client.PutAsJsonAsync($"/api/daily-logs/{Today}?today={Today}", new { date = Today, caloriesKcal = kcal });
+            return (await Get(client, $"/api/stats/log-week?date={Today}&today={Today}")).GetProperty("thisWeek").GetProperty("pool").GetInt32();
+        }
+        Assert.Equal(await Pool(1240), await Pool(2400));
+        // 2400 eaten leaves 1777 for each of the five other days (PLAN.md 3.11).
+        Assert.Equal(1777, (int)Math.Round((await Pool(2400) - 2400) / 5.0));
+    }
+
+    [Fact]
+    public async Task AGainGoal_IsOnTimeAboveTheTdee()
+    {
+        var client = await LoadFixtureAsync();
+        await client.PostAsJsonAsync($"/api/goals?today={Today}", new { targetWeightKg = 90, targetDate = "2027-06-01", startingWeightKg = 84 });
+        var d = await Get(client, $"/api/stats/dashboard?today={Today}");
+        Assert.False(d.GetProperty("goal").GetProperty("losing").GetBoolean());
+        Assert.True(d.GetProperty("targetComparison").GetProperty("onTimeKcal").GetInt32() > 2350);
+    }
+
+    [Fact]
+    public async Task OnceTheGoalsDateHasPassed_TheDashboardIsTrackingOnly()
+    {
+        var client = await LoadFixtureAsync();
+        var d = await Get(client, "/api/stats/dashboard?today=2027-02-20");
+        Assert.Equal("datePassed", d.GetProperty("goal").GetProperty("state").GetString());
+        Assert.False(d.GetProperty("deficits").GetProperty("overall").GetProperty("sinceGoalStart").GetBoolean());
+    }
+
+    [Theory]
+    [InlineData("/api/goals")]
+    [InlineData("/api/goals/maintain")]
+    [InlineData("/api/calorie-goals")]
+    public async Task WritesThatDependOnTheDate_RequireToday(string url)
+    {
+        var client = await LoadFixtureAsync();
+        var r = await client.PostAsJsonAsync(url, new { targetWeightKg = 70, targetDate = "2028-01-01", targetCalories = 1800 });
+        Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode);
     }
 
     [Fact]

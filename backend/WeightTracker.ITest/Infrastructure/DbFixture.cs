@@ -16,7 +16,6 @@ public static class DbFixture
         {
             settings.HeightCm = null;
             settings.PreferredUnit = "kg";
-            settings.TdeeKcal = null;
             settings.AveragingWeeks = 2;
         }
 

@@ -68,7 +68,7 @@ public class CalorieGoalServiceTests
         using var db = CreateDb();
         var service = new CalorieGoalService(db);
 
-        var result = await service.CreateAsync(new CreateCalorieGoalDto(2000));
+        var result = await service.CreateAsync(new CreateCalorieGoalDto(2000), new DateOnly(2026, 11, 24));
 
         Assert.Equal(2000, result.TargetCalories);
         Assert.Equal(1, await db.CalorieGoals.CountAsync());
@@ -82,7 +82,7 @@ public class CalorieGoalServiceTests
         await db.SaveChangesAsync();
         var service = new CalorieGoalService(db);
 
-        await service.CreateAsync(new CreateCalorieGoalDto(1800));
+        await service.CreateAsync(new CreateCalorieGoalDto(1800), new DateOnly(2026, 11, 24));
 
         Assert.Equal(1, await db.CalorieGoals.CountAsync());
         Assert.Equal(1800, (await db.CalorieGoals.FirstAsync()).TargetCalories);
@@ -96,7 +96,7 @@ public class CalorieGoalServiceTests
         await db.SaveChangesAsync();
         var service = new CalorieGoalService(db);
 
-        await service.CreateAsync(new CreateCalorieGoalDto(1800));
+        await service.CreateAsync(new CreateCalorieGoalDto(1800), new DateOnly(2026, 11, 24));
 
         Assert.Equal(2, await db.CalorieGoals.CountAsync());
     }

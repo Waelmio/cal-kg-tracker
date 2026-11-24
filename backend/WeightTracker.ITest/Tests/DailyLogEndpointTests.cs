@@ -201,24 +201,6 @@ public abstract class DailyLogEndpointTestsBase
         Assert.NotNull(logs);
         Assert.Equal(2, logs.Count);
     }
-
-    [Fact]
-    public async Task CalorieTarget_IsPopulated_WhenCalorieGoalExists()
-    {
-        await ResetAsync();
-        // Goal must be created BEFORE the log date for CalorieLogService to find it
-        var logDate = DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime).AddDays(-5);
-        var logDateStr = logDate.ToString("yyyy-MM-dd");
-        await SeedAsync(b => b
-            .WithCalorieGoal(1800, DateTimeOffset.UtcNow.AddDays(-30))
-            .WithDailyLog(logDateStr, calories: 2000));
-
-        var log = await Client.GetFromJsonAsync<DailyLogDto>($"/api/daily-logs/{logDateStr}");
-
-        Assert.NotNull(log);
-        Assert.Equal(1800, log.CalorieTarget);
-    }
-
 }
 
 public class DailyLogEndpointTests_Sqlite : DailyLogEndpointTestsBase, IClassFixture<SqliteWebAppFactory>

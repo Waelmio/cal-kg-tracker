@@ -180,9 +180,6 @@ namespace WeightTracker.Api.Migrations.Postgres
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int?>("TdeeKcal")
-                        .HasColumnType("integer");
-
                     b.HasKey("Id");
 
                     b.ToTable("UserSettings");

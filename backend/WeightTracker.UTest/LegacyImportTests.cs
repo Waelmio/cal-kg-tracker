@@ -97,7 +97,7 @@ public class LegacyImportTests
         db.Goals.Add(new Goal { TargetWeightKg = 75, StartDate = new DateOnly(2026, 6, 1) });
         db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 1900, EffectiveFrom = new DateOnly(2026, 6, 1) });
         db.TdeeEntries.Add(new TdeeEntry { Kcal = 2400, EffectiveFrom = new DateOnly(2026, 6, 1) });
-        db.UserSettings.Add(new UserSettings { Id = 1, HeightCm = 178, PreferredUnit = "lbs", TdeeKcal = 2400, AveragingWeeks = 4 });
+        db.UserSettings.Add(new UserSettings { Id = 1, HeightCm = 178, PreferredUnit = "lbs", AveragingWeeks = 4 });
         await db.SaveChangesAsync();
 
         await new DataService(db).ClearAsync();
@@ -107,7 +107,7 @@ public class LegacyImportTests
         Assert.Empty(await db.CalorieGoals.ToListAsync());
         Assert.Empty(await db.TdeeEntries.ToListAsync());
         var s = await db.UserSettings.SingleAsync();
-        Assert.Equal((null, "kg", null, 2), (s.HeightCm, s.PreferredUnit, s.TdeeKcal, s.AveragingWeeks));
+        Assert.Equal((null, "kg", 2), (s.HeightCm, s.PreferredUnit, s.AveragingWeeks));
     }
 
     [Fact]

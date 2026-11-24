@@ -4,7 +4,8 @@ public record GoalStatusDto(
     int Id,
     string Kind,
     string State,            // none | active | reached | datePassed
-    string? Pace,            // ahead | onTrack | behind (active reach goals only)
+    string? Pace,            // ahead | onTrack | behind (active reach goals with enough weigh-ins)
+    bool Losing,
     decimal TargetWeightKg,
     decimal? StartingWeightKg,
     string StartDate,
@@ -17,4 +18,8 @@ public record GoalStatusDto(
     double? NeededKgPerWeek,
     double? PaceKgPerWeek,
     string? ProjectedDate,
-    int? LateWeeks);
+    int? LateWeeks,
+    string? ReachedOn,       // first day the 7-day average was at or past the target
+    double? RemainingAtTargetDateKg,
+    double MaintainBandKg,
+    bool? WithinBand);       // maintenance goals only

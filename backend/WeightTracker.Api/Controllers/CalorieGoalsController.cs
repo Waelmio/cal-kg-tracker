@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using WeightTracker.Api.DTOs;
 using WeightTracker.Api.Services;
 
@@ -20,7 +21,7 @@ public class CalorieGoalsController(ICalorieGoalService service) : ControllerBas
     }
 
     [HttpPost]
-    public async Task<ActionResult<CalorieGoalDto>> Create([FromBody] CreateCalorieGoalDto dto, [FromQuery] DateOnly? today = null)
+    public async Task<ActionResult<CalorieGoalDto>> Create([FromBody] CreateCalorieGoalDto dto, [FromQuery, BindRequired] DateOnly today)
     {
         var goal = await service.CreateAsync(dto, today);
         return CreatedAtAction(nameof(GetActive), goal);

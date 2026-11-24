@@ -18,8 +18,8 @@ public class DataService(AppDbContext db) : IDataService
         var tdeeEntries = await db.TdeeEntries.OrderBy(t => t.EffectiveFrom).ThenBy(t => t.Id).ToListAsync();
 
         return new ExportImportDto(
-            new UserSettingsDto(settings.HeightCm, settings.PreferredUnit, settings.TdeeKcal, settings.AveragingWeeks),
-            logs.Select(l => new DailyLogDto(0, l.Date.ToString("yyyy-MM-dd"), l.WeightKg, l.CaloriesKcal, l.Notes, null, l.IsCheatDay, l.CreatedAt, l.UpdatedAt, l.CaloriesSetOn)).ToList(),
+            new ExportSettingsDto(settings.HeightCm, settings.PreferredUnit, settings.AveragingWeeks),
+            logs.Select(l => new DailyLogDto(0, l.Date.ToString("yyyy-MM-dd"), l.WeightKg, l.CaloriesKcal, l.Notes, l.IsCheatDay, l.CreatedAt, l.UpdatedAt, l.CaloriesSetOn)).ToList(),
             goals.Select(g => new GoalDto(0, g.TargetWeightKg, g.TargetDate, g.StartingWeightKg, g.StartDate, g.Notes, g.CreatedAt, g.Kind, g.EndedOn, g.EndReason)).ToList(),
             calorieGoals.Select(g => new CalorieGoalDto(0, g.TargetCalories, g.CreatedAt, g.EffectiveFrom)).ToList(),
             CurrentVersion,
@@ -39,7 +39,6 @@ public class DataService(AppDbContext db) : IDataService
         if (s is null) { s = new UserSettings { Id = 1 }; db.UserSettings.Add(s); }
         s.HeightCm = null;
         s.PreferredUnit = "kg";
-        s.TdeeKcal = null;
         s.AveragingWeeks = 2;
 
         await db.SaveChangesAsync();
@@ -125,7 +124,6 @@ public class DataService(AppDbContext db) : IDataService
         if (s is null) { s = new UserSettings { Id = 1 }; db.UserSettings.Add(s); }
         s.HeightCm = dto.Settings.HeightCm;
         s.PreferredUnit = dto.Settings.PreferredUnit;
-        s.TdeeKcal = dto.Settings.TdeeKcal;
         s.AveragingWeeks = dto.Settings.AveragingWeeks is >= 1 and <= 5 ? dto.Settings.AveragingWeeks : 2;
 
         await db.SaveChangesAsync();

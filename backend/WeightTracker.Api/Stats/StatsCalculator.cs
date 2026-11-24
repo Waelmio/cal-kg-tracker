@@ -120,7 +120,15 @@ public sealed class StatsCalculator(StatsData data)
             weights.Count > 0 ? weights.Average() : null, weights.Count);
     }
 
-    public PeriodStats Week(DateOnly monday) => Period(monday, monday.AddDays(6));
+    private readonly Dictionary<DateOnly, PeriodStats> _weeks = [];
+
+    /// <summary>Cached: a week's status looks at its neighbours, and every over-target day asks for its week's status.</summary>
+    public PeriodStats Week(DateOnly monday)
+    {
+        if (!_weeks.TryGetValue(monday, out var week))
+            _weeks[monday] = week = Period(monday, monday.AddDays(6));
+        return week;
+    }
 
     // ── Status colors (3.3) ──────────────────────────────────────────────────
 
@@ -174,7 +182,9 @@ public sealed class StatsCalculator(StatsData data)
         IReadOnlyDictionary<DateOnly, int> Days,        // today..Sunday, rounded, planned days included
         IReadOnlySet<DateOnly> UserLogged,              // future days the user logged (kept as typed)
         int TodayBudget,
-        IReadOnlyDictionary<DateOnly, int> FutureDays); // the next Window-1 weeks, planned the same way
+        double Pool,                                    // what all the free days (today included) share, before clamping
+        bool ReachesTarget,                             // false when even this plan leaves the window over target
+        IReadOnlyDictionary<DateOnly, int> FutureDays); // the next Window-1 weeks (see FutureBudget)
 
     /// <param name="eatenToday">Calories eaten today; if they exceed today's budget, today is treated as fixed at that amount.</param>
     public BudgetResult? Budget(int? eatenToday)
@@ -188,58 +198,52 @@ public sealed class StatsCalculator(StatsData data)
         var rest = Range(today, sunday).ToList();
 
         // Future days the user logged are real logs, they shape the budget at once.
-        var planned = rest.Where(d => d > today && Calories(d) is not null).ToDictionary(d => d, d => Calories(d)!.Value);
+        var planned = rest.Where(d => d > today && Calories(d) is not null).ToDictionary(d => d, d => (double)Calories(d)!.Value);
 
-        Dictionary<DateOnly, double> Solve(IReadOnlyCollection<DateOnly> free, IReadOnlyDictionary<DateOnly, double> fixedDays)
+        double T(DateOnly d) => Target(d) ?? 0;
+        var targets = past.Concat(rest).Sum(T);
+        var eatenPast = past.Sum(d => (double)Calories(d)!.Value);
+
+        Dictionary<DateOnly, double> Solve(IReadOnlyCollection<DateOnly> free, double fixedKcal)
         {
             if (free.Count == 0) return [];
-            var targets = past.Concat(rest).Sum(d => (double)(Target(d) ?? 0));
-            var pool = targets - past.Sum(d => (double)Calories(d)!.Value) - fixedDays.Values.Sum();
-            var extra = (pool - free.Sum(d => (double)(Target(d) ?? 0))) / free.Count;
-            return free.ToDictionary(d => d, d => Math.Max(0, (Target(d) ?? 0) + extra));
+            var extra = (targets - eatenPast - fixedKcal - free.Sum(T)) / free.Count;
+            return free.ToDictionary(d => d, d => Math.Max(0, T(d) + extra));
         }
 
-        var fixedPlanned = planned.ToDictionary(p => p.Key, p => (double)p.Value);
         var free = rest.Where(d => !planned.ContainsKey(d)).ToList();
-        var result = Solve(free, fixedPlanned);
+        var result = Solve(free, planned.Values.Sum());
         var todayBudget = result[today];
+        var todayEaten = todayBudget;   // what today counts for: its full budget until that is exceeded
 
         if (eatenToday is { } eaten && eaten > todayBudget)
         {
-            var fixedWithToday = new Dictionary<DateOnly, double>(fixedPlanned) { [today] = eaten };
-            var others = Solve(rest.Where(d => !fixedWithToday.ContainsKey(d)).ToList(), fixedWithToday);
-            result = new Dictionary<DateOnly, double>(others) { [today] = todayBudget };
+            todayEaten = eaten;
+            result = Solve(free.Where(d => d != today).ToList(), planned.Values.Sum() + eaten);
+            result[today] = todayBudget;
         }
+
+        // The plan as it would be eaten, which the following weeks build on.
+        var simulated = rest.ToDictionary(d => d, d => planned.TryGetValue(d, out var typed) ? typed : d == today ? todayEaten : result[d]);
+        var reaches = eatenPast + simulated.Values.Sum() - targets < 0.5;
 
         var days = new SortedDictionary<DateOnly, int>();
-        foreach (var (d, v) in result) days[d] = Rnd(v);
-        foreach (var (d, v) in planned) days[d] = v;
+        foreach (var d in rest) days[d] = Rnd(planned.TryGetValue(d, out var typed) ? typed : result[d]);
 
-        // What this week's plan means for the weeks after it (see FutureBudget).
-        var simulated = new Dictionary<DateOnly, double>();
-        foreach (var d in rest)
-        {
-            if (planned.TryGetValue(d, out var typed)) simulated[d] = typed;
-            else if (d == today && eatenToday is { } e && e > todayBudget) simulated[d] = e;
-            else simulated[d] = Realistic(d, result[d]);
-        }
-        return new BudgetResult(days, planned.Keys.ToHashSet(), Rnd(todayBudget), FutureBudget(monday, simulated));
+        return new BudgetResult(days, planned.Keys.ToHashSet(), Rnd(todayBudget),
+            targets - eatenPast - planned.Values.Sum(), reaches, FutureBudget(monday, simulated));
     }
 
     /// <summary>
-    /// Plans the weeks after this one. The rule is the same as for this week: any Window consecutive weeks
-    /// should average the target. Week k looks at the Window weeks ending with it, counts what was logged
-    /// as eaten and the earlier planned days (this week's plan, then the weeks before k) as eaten at their
-    /// budget, and shares what is left of the pool over its free days. A week that was over by more than the
-    /// free days can absorb (budget clamped at 0) keeps pulling the next weeks down until it leaves the window.
-    /// Only Window-1 weeks ahead are affected by what is logged now; later weeks are simply on target.
+    /// Plans the weeks after this one, as far as it takes for the average to be reached again. Week k looks at the
+    /// Window weeks ending with it, counts what was logged and what is planned before it as eaten, and shares what is
+    /// left over its free days. So a debt this week can't absorb (budget at 0), or a day typed in advance, lowers the
+    /// next weeks until the debt leaves the window. A debt only ever touches the next Window-1 weeks.
+    /// <para>
+    /// The plan never goes above the target: without that cap, the week that pays back an over-target week would
+    /// itself be "under" and hand the same calories back one week later, forever (+G, -G, +G...).
+    /// </para>
     /// </summary>
-    /// <summary>
-    /// A day whose budget was clamped to 0 can't really be eaten at 0: later weeks would be credited for
-    /// fasting that never happens. For the plan of the following weeks such a day counts as eaten at its target.
-    /// </summary>
-    private double Realistic(DateOnly d, double budget) => budget > 0 ? budget : Target(d) ?? 0;
-
     private IReadOnlyDictionary<DateOnly, int> FutureBudget(DateOnly thisMonday, Dictionary<DateOnly, double> simulated)
     {
         var future = new SortedDictionary<DateOnly, int>();
@@ -247,33 +251,21 @@ public sealed class StatsCalculator(StatsData data)
         {
             var monday = thisMonday.AddDays(7 * k);
             var week = Range(monday, monday.AddDays(6)).ToList();
-            var from = monday.AddDays(-7 * (Window - 1));
 
-            // Days already decided: logged before today, and planned days of earlier weeks.
-            var counted = Range(from, monday.AddDays(-1))
-                .Where(d => d < data.Today ? IsLogged(d) && Target(d) is not null : simulated.ContainsKey(d))
-                .ToList();
-            double Eaten(DateOnly d) => d < data.Today ? Calories(d)!.Value : simulated[d];
+            // Balance of the window before this week: logged days before today, then the plan.
+            var debt = Range(monday.AddDays(-7 * (Window - 1)), monday.AddDays(-1)).Sum(d => Target(d) is not { } t ? 0
+                : d < data.Today ? (Calories(d) is { } eaten ? eaten - t : 0)
+                : simulated.TryGetValue(d, out var kcal) ? kcal - t : 0);
 
             // Days of this week the user already logged ahead of time stay as typed.
-            var typed = week.Where(d => Calories(d) is not null).ToDictionary(d => d, d => (double)Calories(d)!.Value);
-            var free = week.Where(d => !typed.ContainsKey(d)).ToList();
-            if (free.Count == 0)
-            {
-                foreach (var d in week) simulated[d] = typed[d];
-                continue;
-            }
-
-            var pool = counted.Concat(week).Sum(d => (double)(Target(d) ?? 0))
-                       - counted.Sum(Eaten) - typed.Values.Sum();
-            var extra = (pool - free.Sum(d => (double)(Target(d) ?? 0))) / free.Count;
+            debt += week.Sum(d => Calories(d) is { } typed ? typed - (Target(d) ?? 0) : 0);
+            var free = week.Where(d => Calories(d) is null).ToList();
+            var cut = free.Count == 0 ? 0 : Math.Max(0, debt) / free.Count;
 
             foreach (var d in week)
             {
-                if (typed.TryGetValue(d, out var t)) { simulated[d] = t; future[d] = Rnd(t); continue; }
-                var budget = Math.Max(0, (Target(d) ?? 0) + extra);
-                simulated[d] = Realistic(d, budget);
-                future[d] = Rnd(budget);
+                simulated[d] = Calories(d) is { } typed ? typed : Math.Max(0, (Target(d) ?? 0) - cut);
+                future[d] = Rnd(simulated[d]);
             }
         }
         return future;
@@ -333,6 +325,14 @@ public sealed class StatsCalculator(StatsData data)
         return new RegressionLine(slope, my - slope * mx);
     }
 
+    /// <summary>The 7-day average at a date, or at the last weigh-in before it when that week has none.</summary>
+    public double? LatestAverage7(DateOnly d)
+    {
+        if (Average7(d) is { } avg) return avg;
+        var last = data.Days.Values.Where(x => x.WeightKg is not null && x.Date <= d).Select(x => (DateOnly?)x.Date).Max();
+        return last is { } date ? Average7(date) : null;
+    }
+
     private static List<(double X, double Y)> Points(IEnumerable<(DateOnly Date, double Kg)> w) =>
         w.Select(p => ((double)p.Date.DayNumber, p.Kg)).ToList();
 
@@ -348,6 +348,8 @@ public sealed class StatsCalculator(StatsData data)
 
     // ── TDEE estimate (3.9) and diet effect (3.10) ───────────────────────────
 
+    /// <summary>The estimate used for suggestions, the month summary and maintaining.</summary>
+    public const int DefaultTdeeDays = 90;
     public const int MinWeighIns = 6, MinSpanDays = 21;
     public const double MinLoggedShare = 0.7;
 
@@ -387,7 +389,7 @@ public sealed class StatsCalculator(StatsData data)
     /// <summary>What the diet changed. Null when D is below 100 (nothing meaningful to show).</summary>
     public DietEffectResult? DietEffect(TdeeEstimateResult estimate, double startingWeightKg)
     {
-        if (Average7(Today) is not { } now) return null;
+        if (Weight()?.Kg is not { } now) return null;
         var lost = startingWeightKg - now;
         var d = estimate.Tdee - estimate.AvgCalories;
         if (d < 100) return null;

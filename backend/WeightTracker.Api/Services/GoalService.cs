@@ -15,7 +15,13 @@ public class GoalService(AppDbContext db, IStatsService stats, ICalorieGoalServi
     public async Task<List<GoalDto>> GetAllAsync()
     {
         var goals = await db.Goals.OrderByDescending(g => g.CreatedAt).ToListAsync();
-        return goals.Select(ToDto).ToList();
+        var result = new List<GoalDto>();
+        foreach (var g in goals)
+        {
+            var end = g is { EndedOn: { } on, Kind: GoalKind.Reach, StartingWeightKg: not null } ? await WeightAroundAsync(on, on) : null;
+            result.Add(ToDto(g) with { ChangeKg = end - g.StartingWeightKg });
+        }
+        return result;
     }
 
     public async Task<GoalDto?> GetActiveAsync()
@@ -27,13 +33,12 @@ public class GoalService(AppDbContext db, IStatsService stats, ICalorieGoalServi
     private Task<Goal?> ActiveAsync() =>
         db.Goals.Where(g => g.EndedOn == null).OrderByDescending(g => g.CreatedAt).FirstOrDefaultAsync();
 
-    public async Task<GoalDto> CreateAsync(CreateGoalDto dto, DateOnly? todayOrNull = null)
+    public async Task<GoalDto> CreateAsync(CreateGoalDto dto, DateOnly today)
     {
-        var today = todayOrNull ?? DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime);
         var start = dto.StartDate ?? today;
         if (dto.TargetDate <= start) throw new GoalException("The target date must be after the start date.");
 
-        var startingWeight = dto.StartingWeightKg ?? await StartingWeightAsync(start, today);
+        var startingWeight = dto.StartingWeightKg ?? await WeightAroundAsync(start, today);
         if (startingWeight is { } sw && sw == dto.TargetWeightKg)
             throw new GoalException("The target weight must differ from the starting weight.");
 
@@ -91,15 +96,15 @@ public class GoalService(AppDbContext db, IStatsService stats, ICalorieGoalServi
     }
 
     /// <summary>
-    /// Ends the active goal and starts keeping the current weight: a goal of the current weight with no date,
-    /// and a calorie target of "Calories to keep your current weight" (the TDEE when that is not available).
+    /// Ends the active goal and starts keeping a weight: the target of the goal that was reached (the current
+    /// weight otherwise), with no date, and a calorie target of "Calories to keep your current weight" (the TDEE when that is not available).
     /// </summary>
     public async Task<GoalDto> MaintainAsync(DateOnly today)
     {
         var dashboard = await stats.DashboardAsync(today);
         if (dashboard.Weight.Kg is not { } kg) throw new GoalException("Log a weight first.");
 
-        var tdee = await stats.TdeeAsync(90, today);
+        var tdee = await stats.TdeeAsync(StatsCalculator.DefaultTdeeDays, today);
         var keep = tdee.Diet?.Rows.FirstOrDefault(r => r.Key == "keep")?.Kcal ?? tdee.CurrentTdee;
         if (keep is null) throw new GoalException("Set your TDEE first, so there is a calorie target to keep your weight.");
 
@@ -109,16 +114,16 @@ public class GoalService(AppDbContext db, IStatsService stats, ICalorieGoalServi
             active.EndReason = GoalEndReason.Maintain;
         }
 
+        var current = Math.Round((decimal)kg, 1);
         var goal = new Goal
         {
-            TargetWeightKg = Math.Round((decimal)kg, 1),
-            StartingWeightKg = Math.Round((decimal)kg, 1),
+            TargetWeightKg = dashboard.Goal is { State: "reached" } reached ? reached.TargetWeightKg : current,
+            StartingWeightKg = current,
             StartDate = today,
             Kind = GoalKind.Maintain,
         };
         db.Goals.Add(goal);
-        await db.SaveChangesAsync();
-
+        // Saves the goals too (same context), so the goal and its target are written together or not at all.
         await calorieGoals.CreateAsync(new CreateCalorieGoalDto(keep.Value), today);
         return ToDto(goal);
     }
@@ -133,7 +138,7 @@ public class GoalService(AppDbContext db, IStatsService stats, ICalorieGoalServi
     }
 
     /// <summary>Mean of the weigh-ins in the 7 days ending at the date; else the nearest weigh-in within 7 days.</summary>
-    private async Task<decimal?> StartingWeightAsync(DateOnly start, DateOnly today)
+    private async Task<decimal?> WeightAroundAsync(DateOnly start, DateOnly today)
     {
         var window = await db.DailyLogs.AsNoTracking()
             .Where(l => l.WeightKg != null && l.Date >= start.AddDays(-6) && l.Date <= start && l.Date <= today)

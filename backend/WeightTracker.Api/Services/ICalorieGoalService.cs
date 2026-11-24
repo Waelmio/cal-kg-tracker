@@ -6,6 +6,6 @@ public interface ICalorieGoalService
 {
     Task<List<CalorieGoalDto>> GetAllAsync();
     Task<CalorieGoalDto?> GetActiveAsync();
-    Task<CalorieGoalDto> CreateAsync(CreateCalorieGoalDto dto, DateOnly? today = null);
+    Task<CalorieGoalDto> CreateAsync(CreateCalorieGoalDto dto, DateOnly today);
     Task<bool> DeleteAsync(int id);
 }

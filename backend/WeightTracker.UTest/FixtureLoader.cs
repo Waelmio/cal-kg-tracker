@@ -21,7 +21,7 @@ public static class FixtureLoader
         var f = Export();
         var days = f.DailyLogs.ToDictionary(
             l => DateOnly.Parse(l.Date),
-            l => new DayData(DateOnly.Parse(l.Date), (double?)l.WeightKg, l.CaloriesKcal, null, l.IsCheatDay, !string.IsNullOrEmpty(l.Notes)));
+            l => new DayData(DateOnly.Parse(l.Date), (double?)l.WeightKg, l.CaloriesKcal, null, l.IsCheatDay, l.Notes));
         edit?.Invoke(days);
         var first = days.Keys.Min();
         var goal = f.Goals[0];

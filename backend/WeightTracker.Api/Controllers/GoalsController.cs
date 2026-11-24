@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using WeightTracker.Api.DTOs;
 using WeightTracker.Api.Services;
 
@@ -20,7 +21,7 @@ public class GoalsController(IGoalService service) : ControllerBase
     }
 
     [HttpPost]
-    public async Task<ActionResult<GoalDto>> Create([FromBody] CreateGoalDto dto, [FromQuery] DateOnly? today = null)
+    public async Task<ActionResult<GoalDto>> Create([FromBody] CreateGoalDto dto, [FromQuery, BindRequired] DateOnly today)
     {
         try
         {
@@ -42,22 +43,22 @@ public class GoalsController(IGoalService service) : ControllerBase
     }
 
     [HttpPost("{id:int}/end")]
-    public async Task<ActionResult<GoalDto>> End(int id, [FromBody] EndGoalDto dto, [FromQuery] DateOnly? today = null)
+    public async Task<ActionResult<GoalDto>> End(int id, [FromBody] EndGoalDto dto, [FromQuery, BindRequired] DateOnly today)
     {
         try
         {
-            var goal = await service.EndAsync(id, dto, today ?? DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime));
+            var goal = await service.EndAsync(id, dto, today);
             return goal is null ? NotFound() : Ok(goal);
         }
         catch (GoalException e) { return Problem(title: e.Message, statusCode: e.Status); }
     }
 
     [HttpPost("maintain")]
-    public async Task<ActionResult<GoalDto>> Maintain([FromQuery] DateOnly? today = null)
+    public async Task<ActionResult<GoalDto>> Maintain([FromQuery, BindRequired] DateOnly today)
     {
         try
         {
-            return Ok(await service.MaintainAsync(today ?? DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime)));
+            return Ok(await service.MaintainAsync(today));
         }
         catch (GoalException e) { return Problem(title: e.Message, statusCode: e.Status); }
     }

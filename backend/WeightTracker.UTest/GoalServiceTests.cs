@@ -174,6 +174,38 @@ public class GoalServiceTests
     }
 
     [Fact]
+    public async Task Maintain_KeepsTheTargetOfAReachedGoal()
+    {
+        using var db = CreateDb();
+        Weigh(db, "2026-11-23", 77.6m);
+        db.TdeeEntries.Add(new TdeeEntry { Kcal = 2400, EffectiveFrom = new DateOnly(2026, 1, 1) });
+        await db.SaveChangesAsync();
+        var service = Service(db);
+        await service.CreateAsync(new CreateGoalDto(78, new DateOnly(2027, 1, 1), null, null, 88m), Today.AddDays(-5));
+
+        var maintain = await service.MaintainAsync(Today);
+
+        Assert.Equal(78m, maintain.TargetWeightKg);          // "Maintain 78 kg"
+        Assert.Equal(77.6m, maintain.StartingWeightKg);
+    }
+
+    [Fact]
+    public async Task GetAll_GivesTheWeightChangeOfEndedGoals()
+    {
+        using var db = CreateDb();
+        Weigh(db, "2026-11-20", 84m);
+        Weigh(db, "2026-11-22", 83m);
+        await db.SaveChangesAsync();
+        var service = Service(db);
+        var goal = await service.CreateAsync(new CreateGoalDto(78, new DateOnly(2027, 1, 1), new DateOnly(2026, 9, 1), null, 88m), Today);
+        Assert.Null((await service.GetAllAsync()).Single().ChangeKg);
+
+        await service.EndAsync(goal.Id, new EndGoalDto(GoalEndReason.Ended), Today);
+
+        Assert.Equal(-4.5m, (await service.GetAllAsync()).Single().ChangeKg);
+    }
+
+    [Fact]
     public async Task Maintain_Fails_WithoutAWeight_OrWithoutATdee()
     {
         using var db = CreateDb();
@@ -247,7 +279,7 @@ public class GoalStatusTests
             for (var i = 0; i < 28; i++)
             {
                 var d = FixtureLoader.Today.AddDays(-i);
-                days[d] = new DayData(d, 70 + (28 - i) * 0.05, days.TryGetValue(d, out var x) ? x.Calories : null, null, false, false);
+                days[d] = new DayData(d, 70 + (28 - i) * 0.05, days.TryGetValue(d, out var x) ? x.Calories : null, null, false);
             }
         });
         var s = Status(new Goal { Id = 1, StartingWeightKg = 70m, TargetWeightKg = 75m, TargetDate = new DateOnly(2027, 6, 1), StartDate = new DateOnly(2026, 11, 1) }, calc);
@@ -264,6 +296,46 @@ public class GoalStatusTests
         var s = Status(FixtureGoal(g => { g.StartingWeightKg = 80m; g.TargetWeightKg = 90m; }), FixtureLoader.Calc());
         Assert.Null(s.ProjectedDate);
         Assert.Equal("behind", s.Pace);
+    }
+
+    [Fact]
+    public void NotEnoughWeighIns_IsNotBehind()
+    {
+        var calc = FixtureLoader.Calc(2, days =>
+        {
+            foreach (var (d, x) in days.Where(p => p.Key < FixtureLoader.Today.AddDays(-2)).ToList()) days[d] = x with { WeightKg = null };
+        });
+        var s = Status(FixtureGoal(), calc);
+        Assert.Null(s.PaceKgPerWeek);
+        Assert.Null(s.Pace);
+    }
+
+    [Fact]
+    public void Reached_SaysWhen()
+    {
+        var s = Status(FixtureGoal(g => g.TargetWeightKg = 85m), FixtureLoader.Calc());
+        var on = DateOnly.Parse(s.ReachedOn!);
+        var calc = FixtureLoader.Calc();
+        Assert.True(calc.Average7(on) <= 85);
+        Assert.True(calc.Average7(on.AddDays(-1)) > 85);
+    }
+
+    [Fact]
+    public void DatePassed_SaysWhatRemainedOnTheDate_NotToday()
+    {
+        var date = new DateOnly(2026, 11, 1);
+        var calc = FixtureLoader.Calc();
+        var s = Status(FixtureGoal(g => g.TargetDate = date), calc);
+        Assert.Equal(calc.Average7(date)!.Value - 78, s.RemainingAtTargetDateKg!.Value, 6);
+        Assert.True(s.RemainingAtTargetDateKg > s.RemainingKg);
+    }
+
+    [Fact]
+    public void Maintain_IsWithinOneKg_OrNot()
+    {
+        Goal Keep(decimal kg) => new() { Id = 1, Kind = GoalKind.Maintain, TargetWeightKg = kg, StartingWeightKg = kg, StartDate = new DateOnly(2026, 11, 1) };
+        Assert.True(Status(Keep(83.5m), FixtureLoader.Calc()).WithinBand);      // 84.07 now
+        Assert.False(Status(Keep(82.9m), FixtureLoader.Calc()).WithinBand);
     }
 
     [Fact]

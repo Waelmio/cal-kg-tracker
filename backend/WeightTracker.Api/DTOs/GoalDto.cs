@@ -3,7 +3,10 @@ using WeightTracker.Api.Models;
 
 namespace WeightTracker.Api.DTOs;
 
-/// <remarks>In an export the id is left out (0): it carries no meaning and is ignored on import.</remarks>
+/// <remarks>
+/// ChangeKg is computed for goals that ended: the weight around the end date minus the starting weight. Not stored.
+/// In an export the id is left out (0): it carries no meaning and is ignored on import.
+/// </remarks>
 public record GoalDto(
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)] int Id,
     decimal TargetWeightKg,
@@ -14,7 +17,8 @@ public record GoalDto(
     DateTimeOffset CreatedAt,
     GoalKind Kind = GoalKind.Reach,
     DateOnly? EndedOn = null,
-    GoalEndReason? EndReason = null);
+    GoalEndReason? EndReason = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] decimal? ChangeKg = null);
 
 /// <summary>Creating a goal ends the active one (reason Replaced). StartingWeightKg defaults to the 7-day average at the start date.</summary>
 public record CreateGoalDto(
