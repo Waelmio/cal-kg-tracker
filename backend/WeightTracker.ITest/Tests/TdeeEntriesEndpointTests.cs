@@ -43,7 +43,7 @@ public abstract class TdeeEntriesEndpointTestsBase
     {
         var client = await ResetAsync();
         await client.PostAsJsonAsync("/api/tdee-entries?today=2026-01-01", new { kcal = 2000 });
-        await client.PutAsJsonAsync("/api/daily-logs/2026-02-01", new { date = "2026-02-01", caloriesKcal = 1800 });
+        await client.PutAsJsonAsync("/api/daily-logs/2026-02-01?today=2026-02-02", new { date = "2026-02-01", caloriesKcal = 1800 });
         await client.PostAsJsonAsync("/api/tdee-entries?today=2026-03-01", new { kcal = 2500 });
 
         var month = await client.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/stats/month/2026-02?today=2026-03-02");

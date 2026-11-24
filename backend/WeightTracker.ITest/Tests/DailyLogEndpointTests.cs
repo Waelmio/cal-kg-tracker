@@ -26,8 +26,10 @@ public abstract class DailyLogEndpointTestsBase
 
     // UpsertDailyLogDto record requires a Date field even though the controller overwrites
     // it from the route parameter. Include a placeholder to satisfy model binding.
-    private static object LogBody(decimal? weightKg = null, int? caloriesKcal = null, string? notes = null) =>
-        new { Date = "ignored", WeightKg = weightKg, CaloriesKcal = caloriesKcal, Notes = notes };
+    private static object LogBody(decimal? weightKg = null, int? caloriesKcal = null, string? notes = null, bool isCheatDay = false) =>
+        new { Date = "ignored", WeightKg = weightKg, CaloriesKcal = caloriesKcal, Notes = notes, IsCheatDay = isCheatDay };
+
+    private const string T = "?today=2024-03-20";
 
     [Fact]
     public async Task GetAll_ReturnsEmptyArray_WhenNoData()
@@ -45,7 +47,7 @@ public abstract class DailyLogEndpointTestsBase
     {
         await ResetAsync();
 
-        var response = await Client.PutAsJsonAsync("/api/daily-logs/2024-03-15", LogBody(80.5m, 2000));
+        var response = await Client.PutAsJsonAsync("/api/daily-logs/2024-03-15" + T, LogBody(80.5m, 2000));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var log = await response.Content.ReadFromJsonAsync<DailyLogDto>();
@@ -60,8 +62,8 @@ public abstract class DailyLogEndpointTestsBase
     {
         await ResetAsync();
 
-        await Client.PutAsJsonAsync("/api/daily-logs/2024-03-15", LogBody(80.0m));
-        var response = await Client.PutAsJsonAsync("/api/daily-logs/2024-03-15", LogBody(79.5m));
+        await Client.PutAsJsonAsync("/api/daily-logs/2024-03-15" + T, LogBody(80.0m));
+        var response = await Client.PutAsJsonAsync("/api/daily-logs/2024-03-15" + T, LogBody(79.5m));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var log = await response.Content.ReadFromJsonAsync<DailyLogDto>();
@@ -75,7 +77,7 @@ public abstract class DailyLogEndpointTestsBase
     public async Task GetByDate_Returns200_AfterCreate()
     {
         await ResetAsync();
-        await Client.PutAsJsonAsync("/api/daily-logs/2024-03-15", LogBody(80.0m));
+        await Client.PutAsJsonAsync("/api/daily-logs/2024-03-15" + T, LogBody(80.0m));
 
         var response = await Client.GetAsync("/api/daily-logs/2024-03-15");
 
@@ -96,13 +98,67 @@ public abstract class DailyLogEndpointTestsBase
     public async Task Delete_Returns204_AndRemovesEntry()
     {
         await ResetAsync();
-        await Client.PutAsJsonAsync("/api/daily-logs/2024-03-15", LogBody(80.0m));
+        await Client.PutAsJsonAsync("/api/daily-logs/2024-03-15" + T, LogBody(80.0m));
 
         var deleteResponse = await Client.DeleteAsync("/api/daily-logs/2024-03-15");
         var getResponse = await Client.GetAsync("/api/daily-logs/2024-03-15");
 
         Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, getResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Put_RequiresToday()
+    {
+        await ResetAsync();
+        var response = await Client.PutAsJsonAsync("/api/daily-logs/2024-03-15", LogBody(80m));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Put_IsAFullReplace_NullClearsAndZeroIsKept()
+    {
+        await ResetAsync();
+        await Client.PutAsJsonAsync("/api/daily-logs/2024-03-15" + T, LogBody(80m, 2000, "note", true));
+
+        var response = await Client.PutAsJsonAsync("/api/daily-logs/2024-03-15" + T, LogBody(null, 0));
+        var log = await response.Content.ReadFromJsonAsync<DailyLogDto>();
+
+        Assert.Equal(0, log!.CaloriesKcal);
+        Assert.Null(log.WeightKg);
+        Assert.Null(log.Notes);
+        Assert.False(log.IsCheatDay);
+    }
+
+    [Fact]
+    public async Task Put_WithNothing_RemovesTheRow_AndReturns204()
+    {
+        await ResetAsync();
+        await Client.PutAsJsonAsync("/api/daily-logs/2024-03-15" + T, LogBody(80m));
+
+        var response = await Client.PutAsJsonAsync("/api/daily-logs/2024-03-15" + T, LogBody());
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Client.GetAsync("/api/daily-logs/2024-03-15")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Put_RecordsCaloriesSetOn_FromTheClientsToday()
+    {
+        await ResetAsync();
+        var response = await Client.PutAsJsonAsync("/api/daily-logs/2024-03-30?today=2024-03-20", LogBody(null, 2500));
+        var log = await response.Content.ReadFromJsonAsync<DailyLogDto>();
+        Assert.Equal(new DateOnly(2024, 3, 20), log!.CaloriesSetOn);
+    }
+
+    [Fact]
+    public async Task RemovedEndpoints_AreGone()
+    {
+        await ResetAsync();
+        Assert.False((await Client.DeleteAsync("/api/daily-logs/2024-03-15/weight")).IsSuccessStatusCode);
+        Assert.False((await Client.DeleteAsync("/api/daily-logs/2024-03-15/calories")).IsSuccessStatusCode);
+        Assert.False((await Client.PutAsync("/api/daily-logs/2024-03-15/cheat-day", null)).IsSuccessStatusCode);
+        Assert.False((await Client.PostAsync("/api/daily-logs/prefill-week?today=2024-03-15", null)).IsSuccessStatusCode);
     }
 
     [Fact]
@@ -113,63 +169,6 @@ public abstract class DailyLogEndpointTestsBase
         var response = await Client.DeleteAsync("/api/daily-logs/9999-01-01");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task DeleteWeight_NullsWeight_ButKeepsRowWhenCaloriesExist()
-    {
-        await ResetAsync();
-        await Client.PutAsJsonAsync("/api/daily-logs/2024-03-15", LogBody(80.0m, 2000));
-
-        var response = await Client.DeleteAsync("/api/daily-logs/2024-03-15/weight");
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var log = await response.Content.ReadFromJsonAsync<DailyLogDto>();
-        Assert.NotNull(log);
-        Assert.Null(log.WeightKg);
-        Assert.Equal(2000, log.CaloriesKcal);
-    }
-
-    [Fact]
-    public async Task DeleteWeight_RemovesRow_WhenCaloriesAlsoNull()
-    {
-        await ResetAsync();
-        await Client.PutAsJsonAsync("/api/daily-logs/2024-03-15", LogBody(80.0m));
-
-        await Client.DeleteAsync("/api/daily-logs/2024-03-15/weight");
-
-        var getResponse = await Client.GetAsync("/api/daily-logs/2024-03-15");
-        Assert.Equal(HttpStatusCode.NotFound, getResponse.StatusCode);
-    }
-
-    [Fact]
-    public async Task DeleteCalories_NullsCalories_ButKeepsRowWhenWeightExists()
-    {
-        await ResetAsync();
-        await Client.PutAsJsonAsync("/api/daily-logs/2024-03-15", LogBody(80.0m, 2000));
-
-        var response = await Client.DeleteAsync("/api/daily-logs/2024-03-15/calories");
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var log = await response.Content.ReadFromJsonAsync<DailyLogDto>();
-        Assert.NotNull(log);
-        Assert.Equal(80.0m, log.WeightKg);
-        Assert.Null(log.CaloriesKcal);
-    }
-
-    [Fact]
-    public async Task CheatDay_SetAndClear_RoundTrip()
-    {
-        await ResetAsync();
-        await Client.PutAsJsonAsync("/api/daily-logs/2024-03-15", LogBody(80.0m));
-
-        var setResponse = await Client.PutAsync("/api/daily-logs/2024-03-15/cheat-day", null);
-        var afterSet = await setResponse.Content.ReadFromJsonAsync<DailyLogDto>();
-        Assert.True(afterSet!.IsCheatDay);
-
-        var clearResponse = await Client.DeleteAsync("/api/daily-logs/2024-03-15/cheat-day");
-        var afterClear = await clearResponse.Content.ReadFromJsonAsync<DailyLogDto>();
-        Assert.False(afterClear!.IsCheatDay);
     }
 
     [Fact]
@@ -220,22 +219,6 @@ public abstract class DailyLogEndpointTestsBase
         Assert.Equal(1800, log.CalorieTarget);
     }
 
-    [Fact]
-    public async Task PrefillWeek_Creates7Days_WithCalorieGoal()
-    {
-        await ResetAsync();
-        // Use a recent week so the goal CreatedAt (UtcNow) is before the prefill date
-        var today = DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime);
-        // Goal created a week ago so it's active for the current week
-        await SeedAsync(b => b.WithCalorieGoal(2000, DateTimeOffset.UtcNow.AddDays(-7)));
-
-        var response = await Client.PostAsync($"/api/daily-logs/prefill-week?today={today:yyyy-MM-dd}", null);
-
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
-        var logs = await Client.GetFromJsonAsync<List<DailyLogDto>>("/api/daily-logs");
-        Assert.NotNull(logs);
-        Assert.True(logs.Count > 0);
-    }
 }
 
 public class DailyLogEndpointTests_Sqlite : DailyLogEndpointTestsBase, IClassFixture<SqliteWebAppFactory>

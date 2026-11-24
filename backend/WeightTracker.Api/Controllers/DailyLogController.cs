@@ -22,47 +22,21 @@ public class DailyLogController(IDailyLogService service) : ControllerBase
         return log is null ? NotFound() : Ok(log);
     }
 
+    /// <summary>Full replace of the day. <c>today</c> is the client's local date.</summary>
     [HttpPut("{date}")]
     public async Task<ActionResult<DailyLogDto>> Upsert(DateOnly date, [FromBody] UpsertDailyLogDto dto, [FromQuery] DateOnly? today = null)
     {
-        var normalized = new UpsertDailyLogDto(date.ToString("yyyy-MM-dd"), dto.WeightKg, dto.CaloriesKcal, dto.Notes);
-        return Ok(await service.UpsertAsync(normalized, today));
+        if (today is null) return Problem(title: "today is required (yyyy-MM-dd, the client's local date).", statusCode: 400);
+        var normalized = dto with { Date = date.ToString("yyyy-MM-dd") };
+        var saved = await service.UpsertAsync(normalized, today);
+        return saved is null ? NoContent() : Ok(saved);
     }
 
-    [HttpPut("{date}/cheat-day")]
-    public async Task<ActionResult<DailyLogDto>> SetCheatDay(DateOnly date)
-        => Ok(await service.SetCheatDayAsync(date, true));
-
-    [HttpDelete("{date}/cheat-day")]
-    public async Task<ActionResult<DailyLogDto>> ClearCheatDay(DateOnly date)
-        => Ok(await service.SetCheatDayAsync(date, false));
-
+    /// <summary>Delete entry: the whole day, note and cheat mark included.</summary>
     [HttpDelete("{date}")]
     public async Task<IActionResult> DeleteDay(DateOnly date)
     {
         var deleted = await service.DeleteDayAsync(date);
         return deleted ? NoContent() : NotFound();
-    }
-
-    [HttpDelete("{date}/weight")]
-    public async Task<ActionResult<DailyLogDto?>> DeleteWeight(DateOnly date)
-    {
-        var log = await service.DeleteWeightAsync(date);
-        return Ok(log);
-    }
-
-    [HttpDelete("{date}/calories")]
-    public async Task<ActionResult<DailyLogDto?>> DeleteCalories(DateOnly date)
-    {
-        var log = await service.DeleteCaloriesAsync(date);
-        return Ok(log);
-    }
-
-    [HttpPost("prefill-week")]
-    public async Task<IActionResult> PrefillWeek([FromQuery] DateOnly? today)
-    {
-        var date = today ?? DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime);
-        await service.PrefillWeekAsync(date);
-        return NoContent();
     }
 }
