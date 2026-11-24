@@ -18,7 +18,7 @@ public class LegacyImportTests
     };
 
     [Fact]
-    public async Task Import_OfTodaysFormat_AcceptsNoVersionAndAppliesMigrationRules()
+    public async Task Import_OfTodaysFormat_AcceptsNoVersion_AndKeepsEveryValue()
     {
         // an export as written before the redesign: no version, no CaloriesSetOn, no EffectiveFrom
         const string json = """
@@ -43,7 +43,9 @@ public class LegacyImportTests
         await new DataService(db).ImportAsync(dto);
 
         var logs = await db.DailyLogs.OrderBy(l => l.Date).ToListAsync();
-        Assert.Single(logs);                                   // both untouched auto-filled days are gone
+        Assert.Equal(3, logs.Count);                           // nothing is deleted, auto-filled looking days included
+        Assert.All(logs.Where(l => l.Date.Day != 11), l => Assert.Equal(1850, l.CaloriesKcal));
+        Assert.Equal(new DateOnly(2026, 11, 10), logs[1].CaloriesSetOn);
         Assert.Equal(new DateOnly(2026, 11, 11), logs[0].CaloriesSetOn);
         Assert.Equal(80.25m, logs[0].WeightKg);
 

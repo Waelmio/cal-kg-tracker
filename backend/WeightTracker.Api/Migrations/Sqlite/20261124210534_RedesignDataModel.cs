@@ -91,24 +91,12 @@ namespace WeightTracker.Api.Migrations.Sqlite
                 column: "AveragingWeeks",
                 value: 2);
 
-            // Data migration (redesign PLAN.md section 4). Keep in step with LegacyUpgrade.cs.
+            // Data migration (redesign PLAN.md section 4). No stored value is cleared or deleted: auto-filled days are indistinguishable from typed values, so they are kept.
             migrationBuilder.Sql(@"INSERT INTO ""TdeeEntries"" (""Kcal"", ""EffectiveFrom"", ""Source"", ""CreatedAt"")
 SELECT ""TdeeKcal"", COALESCE((SELECT MIN(""Date"") FROM ""DailyLogs""), date('now')), 'Manual', strftime('%Y-%m-%dT%H:%M:%S', 'now') || '.0000000+00:00'
 FROM ""UserSettings"" WHERE ""Id"" = 1 AND ""TdeeKcal"" IS NOT NULL;");
 
             migrationBuilder.Sql(@"UPDATE ""CalorieGoals"" SET ""EffectiveFrom"" = substr(""CreatedAt"", 1, 10);");
-
-            migrationBuilder.Sql(@"UPDATE ""DailyLogs"" SET ""CaloriesKcal"" = NULL
-WHERE ""CaloriesKcal"" IS NOT NULL
-  AND substr(""CreatedAt"", 1, 10) < ""Date""
-  AND ""UpdatedAt"" = ""CreatedAt""
-  AND ""CaloriesKcal"" = (SELECT g.""TargetCalories"" FROM ""CalorieGoals"" g
-                        WHERE g.""EffectiveFrom"" <= ""DailyLogs"".""Date""
-                        ORDER BY g.""EffectiveFrom"" DESC, g.""CreatedAt"" DESC LIMIT 1)
-  AND EXISTS (SELECT 1 FROM ""DailyLogs"" o WHERE o.""Id"" <> ""DailyLogs"".""Id"" AND o.""CreatedAt"" = ""DailyLogs"".""CreatedAt"");");
-
-            migrationBuilder.Sql(@"DELETE FROM ""DailyLogs""
-WHERE ""CaloriesKcal"" IS NULL AND ""WeightKg"" IS NULL AND (""Notes"" IS NULL OR ""Notes"" = '') AND ""IsCheatDay"" = 0;");
 
             migrationBuilder.Sql(@"UPDATE ""DailyLogs"" SET ""CaloriesSetOn"" = substr(""UpdatedAt"", 1, 10) WHERE ""CaloriesKcal"" IS NOT NULL;");
 

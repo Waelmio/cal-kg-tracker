@@ -51,17 +51,16 @@ public abstract class MigrationTestsBase
         await db.Database.MigrateAsync();
 
         var logs = await db.DailyLogs.OrderBy(l => l.Date).ToListAsync();
-        Assert.Equal(new[] { "2026-11-09", "2026-11-11", "2026-11-14", "2026-11-15" }, logs.Select(l => l.Date.ToString("yyyy-MM-dd")));
+        // Nothing is deleted, auto-filled looking days included.
+        Assert.Equal(new[] { "2026-11-09", "2026-11-11", "2026-11-12", "2026-11-13", "2026-11-14", "2026-11-15" }, logs.Select(l => l.Date.ToString("yyyy-MM-dd")));
 
-        Assert.Equal(1850, logs[0].CaloriesKcal);
-        Assert.Equal(new DateOnly(2026, 11, 9), logs[0].CaloriesSetOn);
+        Assert.All(logs.Where(l => l.Date.Day != 11), l => Assert.Equal(1850, l.CaloriesKcal));
         Assert.Equal(2100, logs[1].CaloriesKcal);
         Assert.Equal(new DateOnly(2026, 11, 11), logs[1].CaloriesSetOn);
-        Assert.Equal(1850, logs[2].CaloriesKcal);
-        Assert.Equal(80.5m, logs[2].WeightKg);
-        Assert.Null(logs[3].CaloriesKcal);
-        Assert.Null(logs[3].CaloriesSetOn);
-        Assert.Equal("felt hungry", logs[3].Notes);
+        Assert.Equal(new DateOnly(2026, 11, 10), logs[2].CaloriesSetOn);   // date of UpdatedAt
+        Assert.Equal(80.5m, logs[4].WeightKg);
+        Assert.Equal(1850, logs[5].CaloriesKcal);
+        Assert.Equal("felt hungry", logs[5].Notes);
 
         var targets = await db.CalorieGoals.OrderBy(g => g.EffectiveFrom).ToListAsync();
         Assert.Equal(new DateOnly(2026, 6, 1), targets[0].EffectiveFrom);

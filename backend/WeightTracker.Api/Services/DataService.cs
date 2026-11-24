@@ -40,15 +40,7 @@ public class DataService(AppDbContext db) : IDataService
         {
             var calories = log.CaloriesKcal;
             DateOnly? setOn = log.CaloriesSetOn;
-            if (legacy)
-            {
-                if (LegacyUpgrade.IsUntouchedAutoFill(log, dto.DailyLogs, dto.CalorieGoals))
-                {
-                    if (LegacyUpgrade.IsEmptyAfterClearing(log)) continue;
-                    calories = null;
-                }
-                setOn = calories is null ? null : LegacyUpgrade.DateOf(log.UpdatedAt);
-            }
+            if (legacy) setOn = calories is null ? null : LegacyUpgrade.DateOf(log.UpdatedAt);
 
             db.DailyLogs.Add(new DailyLog
             {
