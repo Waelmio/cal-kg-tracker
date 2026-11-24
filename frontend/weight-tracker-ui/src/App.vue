@@ -1,34 +1,31 @@
 <template>
   <div class="min-h-screen bg-gray-50">
-    <AppNav @open-settings="showSettings = true" />
+    <AppNav />
     <RouterView />
-    <SettingsModal v-if="showSettings" @close="showSettings = false" />
+    <LogSheet v-if="sheet.isOpen" :key="sheet.date ?? ''" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { onBeforeUnmount, onMounted } from 'vue'
 import AppNav from './components/layout/AppNav.vue'
-import SettingsModal from './components/layout/SettingsModal.vue'
-import { useSettingsStore } from './stores/settings'
-import { useCalorieGoalsStore } from './stores/calorieGoals'
-import { prefillWeek } from './api/dailyLog'
-import { localToday } from './utils/dates'
-import { getISOWeek, getISOWeekYear } from './utils/weeks'
+import LogSheet from './components/log/LogSheet.vue'
+import { useAppStore } from './stores/app'
+import { useLogSheetStore } from './stores/logSheet'
 
-const showSettings = ref(false)
+const app = useAppStore()
+const sheet = useLogSheetStore()
+
+// The tab may stay open overnight: when it becomes visible again, re-read the local date and refetch.
+function onVisible() {
+  if (document.visibilityState === 'visible') app.refresh()
+}
 
 onMounted(async () => {
-  const settingsStore = useSettingsStore()
-  const calorieGoalsStore = useCalorieGoalsStore()
-  await Promise.all([settingsStore.fetch(), calorieGoalsStore.fetchAll()])
-
-  const today = localToday()
-  const d = new Date(today + 'T00:00:00Z')
-  const weekKey = `${getISOWeekYear(d)}-W${String(getISOWeek(d)).padStart(2, '0')}`
-  if (localStorage.getItem('prefillWeek') !== weekKey) {
-    await prefillWeek(today)
-    localStorage.setItem('prefillWeek', weekKey)
-  }
+  document.addEventListener('visibilitychange', onVisible)
+  await app.loadSettings().catch(() => {})
+  app.refresh()
 })
+onBeforeUnmount(() => document.removeEventListener('visibilitychange', onVisible))
 </script>
+

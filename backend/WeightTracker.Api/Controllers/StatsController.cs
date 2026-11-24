@@ -39,6 +39,11 @@ public class StatsController(IStatsService stats) : ControllerBase
         return Ok(await stats.MonthAsync(first, today.Value));
     }
 
+    /// <summary>Weigh-ins with their 7-day average, from a date to today.</summary>
+    [HttpGet("weights")]
+    public async Task<ActionResult<List<WeightPointDto>>> Weights([FromQuery] DateOnly from, [FromQuery] DateOnly? today = null)
+        => today is null ? NoToday() : Ok(await stats.WeightsAsync(from, today.Value));
+
     [HttpGet("tdee")]
     public async Task<ActionResult<TdeeStatsDto>> Tdee([FromQuery] int days = 90, [FromQuery] DateOnly? today = null)
     {

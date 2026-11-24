@@ -56,7 +56,11 @@ public record DashboardStatsDto(
     StreakDto Streak,
     DeficitsDto Deficits,
     WeightDto Weight,
-    GoalStatusDto? Goal);
+    GoalStatusDto? Goal,
+    List<WeightPointDto> WeightSeries);
+
+/// <summary>A weigh-in with the 7-day average ending that day. Starts at the goal's start date (else 90 days back).</summary>
+public record WeightPointDto(string Date, double Kg, double Avg7);
 
 public record CalendarDayDto(
     string Date,

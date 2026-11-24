@@ -1,25 +1,35 @@
 <template>
-  <nav class="bg-white border-b border-gray-200 sticky top-0 z-40">
-    <div class="max-w-3xl mx-auto px-4 flex items-center justify-between h-14">
-      <RouterLink to="/" class="font-semibold text-gray-800 text-lg tracking-tight">
-        WeightTracker
-      </RouterLink>
-      <div class="flex items-center gap-5 text-sm font-medium">
-        <RouterLink to="/" class="nav-link" active-class="nav-link-active" exact>Dashboard</RouterLink>
-        <RouterLink to="/log" class="nav-link" active-class="nav-link-active">Log</RouterLink>
-<RouterLink to="/goal" class="nav-link" active-class="nav-link-active">Goal</RouterLink>
-        <button @click="$emit('open-settings')" class="nav-link">⚙</button>
-      </div>
+  <header class="bar">
+    <div class="inner">
+      <RouterLink to="/" class="brand">WeightTracker</RouterLink>
+      <nav aria-label="Main">
+        <RouterLink to="/" class="link" exact-active-class="active">Dashboard</RouterLink>
+        <RouterLink to="/history" class="link" active-class="active">History</RouterLink>
+        <RouterLink to="/goals" class="link" active-class="active">Goals</RouterLink>
+        <RouterLink to="/settings" class="link" active-class="active">Settings</RouterLink>
+        <button type="button" class="log" @click="sheet.open(app.today)">Log today</button>
+      </nav>
     </div>
-  </nav>
+  </header>
 </template>
 
 <script setup lang="ts">
-defineEmits<{ 'open-settings': [] }>()
+import { useAppStore } from '../../stores/app'
+import { useLogSheetStore } from '../../stores/logSheet'
+
+const app = useAppStore()
+const sheet = useLogSheetStore()
 </script>
 
 <style scoped>
-@reference "../../style.css";
-.nav-link { @apply text-gray-400 hover:text-gray-900 transition-colors cursor-pointer; }
-.nav-link-active { @apply text-primary-600 font-semibold; }
+.bar { background: #fff; border-bottom: 1px solid #e5e7eb; }
+.inner { max-width: 960px; margin: 0 auto; padding: 10px 16px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 20px; }
+.brand { font-size: 18px; font-weight: 600; color: #1f2937; text-decoration: none; }
+nav { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 18px; }
+.link { color: #4b5563; text-decoration: none; padding: 12px 0; }
+.link:hover { color: #111827; }
+.link.active { color: #0369a1; font-weight: 600; }
+.link:focus-visible, .log:focus-visible, .brand:focus-visible { outline: 2px solid #0284c7; outline-offset: 2px; border-radius: 4px; }
+.log { background: #0369a1; color: #fff; font-weight: 600; border: 0; padding: 12px 18px; border-radius: 8px; cursor: pointer; min-height: 44px; }
+.log:hover { background: #075985; }
 </style>

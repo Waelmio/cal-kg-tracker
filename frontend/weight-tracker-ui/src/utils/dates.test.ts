@@ -23,3 +23,21 @@ describe('dates', () => {
     expect(addDays('2026-03-29', 1)).toBe('2026-03-30')
   })
 })
+
+import { mondayOf, addMonths, lastDayOfMonth, monthOf } from './dates'
+
+describe('week and month helpers', () => {
+  it('finds the Monday of a week', () => {
+    expect(mondayOf('2026-11-24')).toBe('2026-11-23')   // Tuesday
+    expect(mondayOf('2026-11-22')).toBe('2026-11-16')   // Sunday belongs to the week before
+    expect(mondayOf('2026-11-23')).toBe('2026-11-23')
+  })
+
+  it('moves between months', () => {
+    expect(addMonths('2026-11', 1)).toBe('2026-12')
+    expect(addMonths('2026-12', 1)).toBe('2027-01')
+    expect(addMonths('2026-01', -1)).toBe('2025-12')
+    expect(lastDayOfMonth('2026-02')).toBe('2026-02-28')
+    expect(monthOf('2026-11-24')).toBe('2026-11')
+  })
+})

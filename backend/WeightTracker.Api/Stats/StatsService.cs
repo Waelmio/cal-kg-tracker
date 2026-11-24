@@ -14,6 +14,7 @@ public interface IStatsService
     Task<MonthSummaryDto> MonthAsync(DateOnly firstOfMonth, DateOnly today);
     Task<TdeeStatsDto> TdeeAsync(int days, DateOnly today);
     Task<GoalStatusDto?> GoalStatusAsync(DateOnly today);
+    Task<List<WeightPointDto>> WeightsAsync(DateOnly from, DateOnly today);
 }
 
 public class StatsService(AppDbContext db) : IStatsService
@@ -112,8 +113,21 @@ public class StatsService(AppDbContext db) : IStatsService
             Fmt(today), c.Window, c.CalorieTarget(today), c.Tdee(today), budgetDto, week,
             new StreakDto(streak.Days, streak.NextGap, rows),
             new DeficitsDto(weekly, overall), weightDto,
-            GoalFor(goals, c));
+            GoalFor(goals, c),
+            WeightSeries(c, activeGoal?.StartDate ?? today.AddDays(-90)));
     }
+
+    public async Task<List<WeightPointDto>> WeightsAsync(DateOnly from, DateOnly today)
+    {
+        var (c, _, _) = await LoadAsync(today);
+        return WeightSeries(c, from);
+    }
+
+    private static List<WeightPointDto> WeightSeries(StatsCalculator c, DateOnly from) =>
+        Range(from, c.Today)
+            .Where(d => c.Data.Days.TryGetValue(d, out var x) && x.WeightKg is not null)
+            .Select(d => new WeightPointDto(Fmt(d), c.Data.Days[d].WeightKg!.Value, c.Average7(d)!.Value))
+            .ToList();
 
     public async Task<GoalStatusDto?> GoalStatusAsync(DateOnly today)
     {
