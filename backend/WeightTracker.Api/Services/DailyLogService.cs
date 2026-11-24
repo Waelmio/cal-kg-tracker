@@ -28,7 +28,7 @@ public class DailyLogService(AppDbContext db, ICalorieLogService calorieLogServi
         return ToDto(log, target);
     }
 
-    public async Task<DailyLogDto> UpsertAsync(UpsertDailyLogDto dto)
+    public async Task<DailyLogDto> UpsertAsync(UpsertDailyLogDto dto, DateOnly? today = null)
     {
         var date = DateOnly.Parse(dto.Date);
         var log = await db.DailyLogs.FirstOrDefaultAsync(l => l.Date == date);
@@ -40,7 +40,11 @@ public class DailyLogService(AppDbContext db, ICalorieLogService calorieLogServi
         }
 
         if (dto.WeightKg.HasValue) log.WeightKg = dto.WeightKg;
-        if (dto.CaloriesKcal.HasValue) log.CaloriesKcal = dto.CaloriesKcal;
+        if (dto.CaloriesKcal.HasValue)
+        {
+            if (log.CaloriesKcal != dto.CaloriesKcal) log.CaloriesSetOn = today ?? DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime);
+            log.CaloriesKcal = dto.CaloriesKcal;
+        }
         if (dto.Notes is not null) log.Notes = dto.Notes;
         log.UpdatedAt = DateTimeOffset.UtcNow;
 
@@ -116,7 +120,7 @@ public class DailyLogService(AppDbContext db, ICalorieLogService calorieLogServi
             if (log.Id != 0) db.DailyLogs.Remove(log);
             await db.SaveChangesAsync();
             // Return a synthetic empty DTO since the row no longer exists
-            return new DailyLogDto(0, date.ToString("yyyy-MM-dd"), null, null, null, null, false, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+            return new DailyLogDto(0, date.ToString("yyyy-MM-dd"), null, null, null, null, false, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null);
         }
 
         await db.SaveChangesAsync();
@@ -134,7 +138,7 @@ public class DailyLogService(AppDbContext db, ICalorieLogService calorieLogServi
             .Where(l => l.Date >= monday && l.Date <= sunday)
             .ToListAsync();
         var goals = await db.CalorieGoals
-            .OrderByDescending(g => g.CreatedAt)
+            .OrderByDescending(g => g.EffectiveFrom).ThenByDescending(g => g.CreatedAt)
             .ToListAsync();
 
         var logByDate = existingLogs.ToDictionary(l => l.Date);
@@ -145,8 +149,7 @@ public class DailyLogService(AppDbContext db, ICalorieLogService calorieLogServi
             if (logByDate.TryGetValue(date, out var log) && log.CaloriesKcal.HasValue)
                 continue;
 
-            var dateEndUtc = date.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
-            var target = goals.FirstOrDefault(g => g.CreatedAt <= dateEndUtc)?.TargetCalories;
+            var target = goals.FirstOrDefault(g => g.EffectiveFrom <= date)?.TargetCalories;
             if (target is null) continue;
 
             if (log is null)
@@ -159,11 +162,12 @@ public class DailyLogService(AppDbContext db, ICalorieLogService calorieLogServi
                 log.UpdatedAt = now;
             }
             log.CaloriesKcal = target;
+            log.CaloriesSetOn = today;
         }
 
         await db.SaveChangesAsync();
     }
 
     private static DailyLogDto ToDto(DailyLog l, int? calorieTarget) =>
-        new(l.Id, l.Date.ToString("yyyy-MM-dd"), l.WeightKg, l.CaloriesKcal, l.Notes, calorieTarget, l.IsCheatDay, l.CreatedAt, l.UpdatedAt);
+        new(l.Id, l.Date.ToString("yyyy-MM-dd"), l.WeightKg, l.CaloriesKcal, l.Notes, calorieTarget, l.IsCheatDay, l.CreatedAt, l.UpdatedAt, l.CaloriesSetOn);
 }

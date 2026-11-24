@@ -20,9 +20,9 @@ public class CalorieGoalsController(ICalorieGoalService service) : ControllerBas
     }
 
     [HttpPost]
-    public async Task<ActionResult<CalorieGoalDto>> Create([FromBody] CreateCalorieGoalDto dto)
+    public async Task<ActionResult<CalorieGoalDto>> Create([FromBody] CreateCalorieGoalDto dto, [FromQuery] DateOnly? today = null)
     {
-        var goal = await service.CreateAsync(dto);
+        var goal = await service.CreateAsync(dto, today);
         return CreatedAtAction(nameof(GetActive), goal);
     }
 

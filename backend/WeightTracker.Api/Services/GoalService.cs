@@ -19,7 +19,7 @@ public class GoalService(AppDbContext db) : IGoalService
         return goal is null ? null : ToDto(goal);
     }
 
-    public async Task<GoalDto> CreateAsync(CreateGoalDto dto)
+    public async Task<GoalDto> CreateAsync(CreateGoalDto dto, DateOnly? today = null)
     {
         var latestWeight = await db.DailyLogs
             .Where(l => l.WeightKg != null)
@@ -32,7 +32,7 @@ public class GoalService(AppDbContext db) : IGoalService
             TargetWeightKg = dto.TargetWeightKg,
             TargetDate = dto.TargetDate,
             StartingWeightKg = latestWeight,
-            StartDate = dto.StartDate ?? DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime),
+            StartDate = dto.StartDate ?? today ?? DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime),
             Notes = dto.Notes,
         };
 
@@ -57,5 +57,8 @@ public class GoalService(AppDbContext db) : IGoalService
         g.StartingWeightKg,
         g.StartDate,
         g.Notes,
-        g.CreatedAt);
+        g.CreatedAt,
+        g.Kind,
+        g.EndedOn,
+        g.EndReason);
 }

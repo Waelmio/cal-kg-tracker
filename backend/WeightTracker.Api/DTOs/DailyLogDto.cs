@@ -11,7 +11,8 @@ public record DailyLogDto(
     int? CalorieTarget,
     bool IsCheatDay,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    DateOnly? CaloriesSetOn = null);
 
 public record UpsertDailyLogDto(
     string Date,

@@ -229,6 +229,7 @@ import { useSettingsStore } from '../stores/settings'
 import { useCalorieGoalsStore } from '../stores/calorieGoals'
 import { toKg, formatWeight, bmiLabel, displayWeight } from '../utils/units'
 import { getComputedTdee } from '../api/tdee'
+import { localToday, addDays } from '../utils/dates'
 import type { TdeeComputation } from '../types'
 
 const store = useGoalsStore()
@@ -304,8 +305,8 @@ const goalOnTrack = computed<boolean | null>(() => {
   return projectionVsTdee.value.kgPerWeek >= requiredWeeklyLossKg.value
 })
 
-const today = new Date().toISOString().split('T')[0]
-const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0]
+const today = localToday()
+const tomorrow = addDays(today, 1)
 const targetDisplay = ref<number | ''>('')
 const targetDate = ref(tomorrow)
 const startDate = ref(today)
@@ -349,6 +350,7 @@ async function saveTdee() {
       ...settingsStore.settings,
       tdeeKcal: Number(tdeeInput.value),
     })
+    await dashboard.fetch()
   } finally {
     savingTdee.value = false
   }

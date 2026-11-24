@@ -20,8 +20,8 @@ describe('lbsToKg', () => {
     expect(lbsToKg(2.2)).toBe(1)
   })
 
-  it('converts 154.3 lbs to approximately 70 kg', () => {
-    expect(lbsToKg(154.3)).toBe(70)
+  it('converts 154.3 lbs to 69.99 kg (2 decimals)', () => {
+    expect(lbsToKg(154.3)).toBe(69.99)
   })
 
   it('converts 0 lbs to 0 kg', () => {
@@ -94,5 +94,12 @@ describe('bmiLabel', () => {
 
   it('uses boundary values correctly (30 is Obese)', () => {
     expect(bmiLabel(30).text).toBe('Obese')
+  })
+})
+
+describe('lbs round trip', () => {
+  it('keeps 2 decimals instead of rounding to 0.1 kg', () => {
+    expect(lbsToKg(185)).toBe(83.91)
+    expect(toKg(185, 'lbs')).toBe(83.91)
   })
 })

@@ -145,6 +145,7 @@
 </template>
 
 <script setup lang="ts">
+import { localToday, addDays } from '../utils/dates'
 import { ref, computed, onMounted } from 'vue'
 import { useSettingsStore } from '../stores/settings'
 import { useCalorieGoalsStore } from '../stores/calorieGoals'
@@ -161,8 +162,8 @@ const calorieGoalsStore = useCalorieGoalsStore()
 const dailyLogStore = useDailyLogStore()
 const unit = computed(() => settingsStore.settings.preferredUnit)
 
-const today = new Date().toISOString().split('T')[0]
-const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
+const today = localToday()
+const yesterday = addDays(today, -1)
 const selectedDate = ref(today)
 const calorieTarget = computed(() => calorieGoalsStore.getTargetForDate(selectedDate.value))
 const log = computed(() => dailyLogStore.logs.find((l) => l.date === selectedDate.value) ?? null)

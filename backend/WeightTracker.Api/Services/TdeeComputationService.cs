@@ -10,9 +10,9 @@ public class TdeeComputationService(AppDbContext db) : ITdeeComputationService
     private const int MinCaloriePoints = 7;
     private const int MinWeightPoints = 3;
 
-    public async Task<TdeeComputationDto?> ComputeAsync(int days)
+    public async Task<TdeeComputationDto?> ComputeAsync(int days, DateOnly? todayOverride = null)
     {
-        var today = DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime);
+        var today = todayOverride ?? DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime);
         var from = today.AddDays(-days);
 
         var logs = await db.DailyLogs

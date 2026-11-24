@@ -46,6 +46,7 @@
 import { reactive, ref, onMounted } from 'vue'
 import { useSettingsStore } from '../../stores/settings'
 import { exportData, importData } from '../../api/data'
+import { localToday } from '../../utils/dates'
 import type { UserSettings } from '../../types'
 
 const emit = defineEmits<{ close: [] }>()
@@ -67,7 +68,7 @@ async function handleExport() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `weighttracker-${new Date().toISOString().slice(0, 10)}.json`
+    a.download = `weighttracker-${localToday()}.json`
     a.click()
     URL.revokeObjectURL(url)
   } catch (e) {

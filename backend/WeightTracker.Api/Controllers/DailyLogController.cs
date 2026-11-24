@@ -23,10 +23,10 @@ public class DailyLogController(IDailyLogService service) : ControllerBase
     }
 
     [HttpPut("{date}")]
-    public async Task<ActionResult<DailyLogDto>> Upsert(DateOnly date, [FromBody] UpsertDailyLogDto dto)
+    public async Task<ActionResult<DailyLogDto>> Upsert(DateOnly date, [FromBody] UpsertDailyLogDto dto, [FromQuery] DateOnly? today = null)
     {
         var normalized = new UpsertDailyLogDto(date.ToString("yyyy-MM-dd"), dto.WeightKg, dto.CaloriesKcal, dto.Notes);
-        return Ok(await service.UpsertAsync(normalized));
+        return Ok(await service.UpsertAsync(normalized, today));
     }
 
     [HttpPut("{date}/cheat-day")]

@@ -34,7 +34,7 @@ public class CalorieLogService(AppDbContext db) : ICalorieLogService
     // Loads goals + settings once, then resolves each log's target in memory.
     private async Task<List<DailyLogWithTarget>> EnrichCoreAsync(IReadOnlyList<DailyLog> logs)
     {
-        var goals = await db.CalorieGoals.OrderByDescending(g => g.CreatedAt).ToListAsync();
+        var goals = await db.CalorieGoals.OrderByDescending(g => g.EffectiveFrom).ThenByDescending(g => g.CreatedAt).ToListAsync();
         var settings = await db.UserSettings.FindAsync(1);
         var tdeeKcal = settings?.TdeeKcal;
 
@@ -49,17 +49,15 @@ public class CalorieLogService(AppDbContext db) : ICalorieLogService
     // Finds the most recent CalorieGoal created on or before the given date.
     private static int? ActiveTarget(IReadOnlyList<CalorieGoal> goals, DateOnly date)
     {
-        var dateEndUtc = date.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
-        return goals.FirstOrDefault(g => g.CreatedAt <= dateEndUtc)?.TargetCalories;
+        return goals.FirstOrDefault(g => g.EffectiveFrom <= date)?.TargetCalories;
     }
 
     // Single-row query used by GetEffectiveTargetAsync for non-cheat days.
     private async Task<int?> ActiveTargetFromDbAsync(DateOnly date)
     {
-        var dateEndUtc = date.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
         var goal = await db.CalorieGoals
-            .Where(g => g.CreatedAt <= dateEndUtc)
-            .OrderByDescending(g => g.CreatedAt)
+            .Where(g => g.EffectiveFrom <= date)
+            .OrderByDescending(g => g.EffectiveFrom).ThenByDescending(g => g.CreatedAt)
             .FirstOrDefaultAsync();
         return goal?.TargetCalories;
     }

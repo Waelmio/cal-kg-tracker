@@ -41,6 +41,7 @@
 </template>
 
 <script setup lang="ts">
+import { localToday } from '../../utils/dates'
 import { ref, computed, watch } from 'vue'
 import { Line } from 'vue-chartjs'
 import {
@@ -97,7 +98,7 @@ const canShowTdeeProjection = computed(() =>
 function fromDateForRange(r: Range): string | null {
   const days = rangeDays[r]
   if (days == null) return null
-  const d = new Date(new Date().toLocaleDateString('en-CA') + 'T00:00:00Z')
+  const d = new Date(localToday() + 'T00:00:00Z')
   d.setUTCDate(d.getUTCDate() - days)
   return d.toISOString().slice(0, 10)
 }

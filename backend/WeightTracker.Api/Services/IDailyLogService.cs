@@ -6,7 +6,7 @@ public interface IDailyLogService
 {
     Task<List<DailyLogDto>> GetAllAsync(DateOnly? from, DateOnly? to, int? limit);
     Task<DailyLogDto?> GetByDateAsync(DateOnly date);
-    Task<DailyLogDto> UpsertAsync(UpsertDailyLogDto dto);
+    Task<DailyLogDto> UpsertAsync(UpsertDailyLogDto dto, DateOnly? today = null);
     Task<bool> DeleteDayAsync(DateOnly date);
     Task<DailyLogDto?> DeleteWeightAsync(DateOnly date);
     Task<DailyLogDto?> DeleteCaloriesAsync(DateOnly date);

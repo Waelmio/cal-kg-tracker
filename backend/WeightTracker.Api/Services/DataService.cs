@@ -7,34 +7,55 @@ namespace WeightTracker.Api.Services;
 
 public class DataService(AppDbContext db) : IDataService
 {
+    public const int CurrentVersion = 2;
+
     public async Task<ExportImportDto> ExportAsync()
     {
         var settings = await db.UserSettings.FindAsync(1) ?? new UserSettings();
         var logs = await db.DailyLogs.OrderBy(l => l.Date).ToListAsync();
         var goals = await db.Goals.OrderBy(g => g.CreatedAt).ToListAsync();
         var calorieGoals = await db.CalorieGoals.OrderBy(g => g.CreatedAt).ToListAsync();
+        var tdeeEntries = await db.TdeeEntries.OrderBy(t => t.EffectiveFrom).ThenBy(t => t.Id).ToListAsync();
 
         return new ExportImportDto(
-            new UserSettingsDto(settings.HeightCm, settings.PreferredUnit, settings.TdeeKcal),
-            logs.Select(l => new DailyLogDto(l.Id, l.Date.ToString("yyyy-MM-dd"), l.WeightKg, l.CaloriesKcal, l.Notes, null, l.IsCheatDay, l.CreatedAt, l.UpdatedAt)).ToList(),
-            goals.Select(g => new GoalDto(g.Id, g.TargetWeightKg, g.TargetDate, g.StartingWeightKg, g.StartDate, g.Notes, g.CreatedAt)).ToList(),
-            calorieGoals.Select(g => new CalorieGoalDto(g.Id, g.TargetCalories, g.CreatedAt)).ToList()
+            new UserSettingsDto(settings.HeightCm, settings.PreferredUnit, settings.TdeeKcal, settings.AveragingWeeks),
+            logs.Select(l => new DailyLogDto(l.Id, l.Date.ToString("yyyy-MM-dd"), l.WeightKg, l.CaloriesKcal, l.Notes, null, l.IsCheatDay, l.CreatedAt, l.UpdatedAt, l.CaloriesSetOn)).ToList(),
+            goals.Select(g => new GoalDto(g.Id, g.TargetWeightKg, g.TargetDate, g.StartingWeightKg, g.StartDate, g.Notes, g.CreatedAt, g.Kind, g.EndedOn, g.EndReason)).ToList(),
+            calorieGoals.Select(g => new CalorieGoalDto(g.Id, g.TargetCalories, g.CreatedAt, g.EffectiveFrom)).ToList(),
+            CurrentVersion,
+            tdeeEntries.Select(t => new TdeeEntryDto(t.Id, t.Kcal, t.EffectiveFrom, t.Source, t.CreatedAt)).ToList()
         );
     }
 
     public async Task ImportAsync(ExportImportDto dto)
     {
+        var legacy = dto.Version is null or < 2;
+
         db.DailyLogs.RemoveRange(await db.DailyLogs.ToListAsync());
         db.Goals.RemoveRange(await db.Goals.ToListAsync());
         db.CalorieGoals.RemoveRange(await db.CalorieGoals.ToListAsync());
+        db.TdeeEntries.RemoveRange(await db.TdeeEntries.ToListAsync());
 
         foreach (var log in dto.DailyLogs)
         {
+            var calories = log.CaloriesKcal;
+            DateOnly? setOn = log.CaloriesSetOn;
+            if (legacy)
+            {
+                if (LegacyUpgrade.IsUntouchedAutoFill(log, dto.DailyLogs, dto.CalorieGoals))
+                {
+                    if (LegacyUpgrade.IsEmptyAfterClearing(log)) continue;
+                    calories = null;
+                }
+                setOn = calories is null ? null : LegacyUpgrade.DateOf(log.UpdatedAt);
+            }
+
             db.DailyLogs.Add(new DailyLog
             {
                 Date = DateOnly.Parse(log.Date),
                 WeightKg = log.WeightKg,
-                CaloriesKcal = log.CaloriesKcal,
+                CaloriesKcal = calories,
+                CaloriesSetOn = setOn,
                 Notes = log.Notes,
                 IsCheatDay = log.IsCheatDay,
                 CreatedAt = log.CreatedAt,
@@ -42,8 +63,18 @@ public class DataService(AppDbContext db) : IDataService
             });
         }
 
-        foreach (var goal in dto.Goals)
+        var orderedGoals = dto.Goals.OrderBy(g => g.CreatedAt).ToList();
+        for (var i = 0; i < orderedGoals.Count; i++)
         {
+            var goal = orderedGoals[i];
+            var endedOn = goal.EndedOn;
+            var reason = goal.EndReason;
+            if (legacy && i < orderedGoals.Count - 1)
+            {
+                endedOn = LegacyUpgrade.DateOf(orderedGoals[i + 1].CreatedAt);
+                reason = GoalEndReason.Replaced;
+            }
+
             db.Goals.Add(new Goal
             {
                 TargetWeightKg = goal.TargetWeightKg,
@@ -51,6 +82,9 @@ public class DataService(AppDbContext db) : IDataService
                 StartingWeightKg = goal.StartingWeightKg,
                 StartDate = goal.StartDate,
                 Notes = goal.Notes,
+                Kind = goal.Kind,
+                EndedOn = endedOn,
+                EndReason = reason,
                 CreatedAt = goal.CreatedAt,
             });
         }
@@ -60,8 +94,21 @@ public class DataService(AppDbContext db) : IDataService
             db.CalorieGoals.Add(new CalorieGoal
             {
                 TargetCalories = cg.TargetCalories,
+                EffectiveFrom = cg.EffectiveFrom ?? LegacyUpgrade.DateOf(cg.CreatedAt),
                 CreatedAt = cg.CreatedAt,
             });
+        }
+
+        if (dto.TdeeEntries is { Count: > 0 })
+        {
+            foreach (var t in dto.TdeeEntries)
+                db.TdeeEntries.Add(new TdeeEntry { Kcal = t.Kcal, EffectiveFrom = t.EffectiveFrom, Source = t.Source, CreatedAt = t.CreatedAt });
+        }
+        else if (dto.Settings.TdeeKcal is { } kcal)
+        {
+            // One entry effective from the earliest log, so past deficits don't change.
+            var first = dto.DailyLogs.Select(l => DateOnly.Parse(l.Date)).DefaultIfEmpty(DateOnly.FromDateTime(DateTime.UtcNow)).Min();
+            db.TdeeEntries.Add(new TdeeEntry { Kcal = kcal, EffectiveFrom = first, Source = TdeeSource.Manual });
         }
 
         var s = await db.UserSettings.FindAsync(1);
@@ -69,6 +116,7 @@ public class DataService(AppDbContext db) : IDataService
         s.HeightCm = dto.Settings.HeightCm;
         s.PreferredUnit = dto.Settings.PreferredUnit;
         s.TdeeKcal = dto.Settings.TdeeKcal;
+        s.AveragingWeeks = dto.Settings.AveragingWeeks is >= 1 and <= 5 ? dto.Settings.AveragingWeeks : 2;
 
         await db.SaveChangesAsync();
     }

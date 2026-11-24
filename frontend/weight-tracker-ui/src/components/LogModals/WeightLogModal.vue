@@ -33,6 +33,7 @@
 </template>
 
 <script setup lang="ts">
+import { localToday } from '../../utils/dates'
 import { ref, computed, watch, onMounted } from 'vue'
 import { useDailyLogStore } from '../../stores/dailyLog'
 import { useSettingsStore } from '../../stores/settings'
@@ -47,7 +48,7 @@ const store = useDailyLogStore()
 const settingsStore = useSettingsStore()
 const unit = computed(() => settingsStore.settings.preferredUnit)
 
-const today = new Date().toISOString().split('T')[0]
+const today = localToday()
 const date = ref(props.initialDate ?? today)
 const weightDisplay = ref<number | ''>('')
 const existing = ref<DailyLog | null>(null)

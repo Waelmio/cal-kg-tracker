@@ -3,7 +3,7 @@ import type { WeightUnit } from '../types'
 
 export const kgToLbs = (kg: number): number => Math.round(kg * 2.20462 * 10) / 10
 
-export const lbsToKg = (lbs: number): number => Math.round((lbs / 2.20462) * 10) / 10
+export const lbsToKg = (lbs: number): number => Math.round((lbs / 2.20462) * 100) / 100
 
 export const formatWeight = (kg: number, unit: WeightUnit): string => {
   if (unit === 'lbs') return `${kgToLbs(kg)} lbs`

@@ -4,5 +4,5 @@ namespace WeightTracker.Api.Services;
 
 public interface ITdeeComputationService
 {
-    Task<TdeeComputationDto?> ComputeAsync(int days);
+    Task<TdeeComputationDto?> ComputeAsync(int days, DateOnly? today = null);
 }

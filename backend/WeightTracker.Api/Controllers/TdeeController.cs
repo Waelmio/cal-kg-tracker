@@ -9,12 +9,12 @@ namespace WeightTracker.Api.Controllers;
 public class TdeeController(ITdeeComputationService service) : ControllerBase
 {
     [HttpGet("computed")]
-    public async Task<ActionResult<TdeeComputationDto>> GetComputed([FromQuery] int days = 90)
+    public async Task<ActionResult<TdeeComputationDto>> GetComputed([FromQuery] int days = 90, [FromQuery] DateOnly? today = null)
     {
         if (days < 14 || days > 365)
             return BadRequest("days must be between 14 and 365.");
 
-        var result = await service.ComputeAsync(days);
+        var result = await service.ComputeAsync(days, today);
         if (result is null)
             return UnprocessableEntity(new { error = "Not enough data. Need at least 7 calorie entries and 3 weight entries in the period." });
 

@@ -61,6 +61,7 @@
 </template>
 
 <script setup lang="ts">
+import { localToday } from '../../utils/dates'
 import { ref, computed, watch, onMounted } from 'vue'
 import { useDailyLogStore } from '../../stores/dailyLog'
 import { useCalorieGoalsStore } from '../../stores/calorieGoals'
@@ -75,7 +76,7 @@ const store = useDailyLogStore()
 const calorieGoalsStore = useCalorieGoalsStore()
 const settingsStore = useSettingsStore()
 
-const today = new Date().toISOString().split('T')[0]
+const today = localToday()
 const date = ref(props.initialDate ?? today)
 const isCheatDay = ref(false)
 const showMore = ref(false)

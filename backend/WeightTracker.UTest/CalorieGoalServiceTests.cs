@@ -78,7 +78,7 @@ public class CalorieGoalServiceTests
     public async Task CreateAsync_ReplacesExistingGoalCreatedToday()
     {
         using var db = CreateDb();
-        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 2000, CreatedAt = DateTime.UtcNow });
+        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 2000, EffectiveFrom = DateOnly.FromDateTime(DateTime.UtcNow), CreatedAt = DateTime.UtcNow });
         await db.SaveChangesAsync();
         var service = new CalorieGoalService(db);
 
@@ -92,7 +92,7 @@ public class CalorieGoalServiceTests
     public async Task CreateAsync_DoesNotReplaceGoalFromPreviousDay()
     {
         using var db = CreateDb();
-        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 2000, CreatedAt = DateTime.UtcNow.AddDays(-1) });
+        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 2000, EffectiveFrom = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1)), CreatedAt = DateTime.UtcNow.AddDays(-1) });
         await db.SaveChangesAsync();
         var service = new CalorieGoalService(db);
 

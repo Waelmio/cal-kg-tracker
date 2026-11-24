@@ -104,8 +104,8 @@ public class CalorieLogServiceTests
         );
         // Goal A was active on jan10, Goal B replaced it on jan15
         db.CalorieGoals.AddRange(
-            new CalorieGoal { TargetCalories = 2200, CreatedAt = jan10.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) },
-            new CalorieGoal { TargetCalories = 1900, CreatedAt = jan20.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) }
+            new CalorieGoal { TargetCalories = 2200, EffectiveFrom = jan10, CreatedAt = jan10.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) },
+            new CalorieGoal { TargetCalories = 1900, EffectiveFrom = jan20, CreatedAt = jan20.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) }
         );
         await db.SaveChangesAsync();
 
@@ -125,7 +125,7 @@ public class CalorieLogServiceTests
         var feb1 = new DateOnly(2024, 2, 1);
 
         db.DailyLogs.Add(new DailyLog { Date = jan1, CaloriesKcal = 2000 });
-        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 1800, CreatedAt = feb1.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) });
+        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 1800, EffectiveFrom = feb1, CreatedAt = feb1.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) });
         await db.SaveChangesAsync();
 
         var result = await CreateService(db).GetEnrichedAsync();
@@ -139,7 +139,7 @@ public class CalorieLogServiceTests
         using var db = CreateDb();
         var date = new DateOnly(2024, 1, 10);
         db.DailyLogs.Add(new DailyLog { Date = date, CaloriesKcal = 2000 });
-        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 1800, CreatedAt = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) });
+        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 1800, EffectiveFrom = date, CreatedAt = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) });
         await db.SaveChangesAsync();
 
         var result = await CreateService(db).GetEnrichedAsync();
@@ -154,7 +154,7 @@ public class CalorieLogServiceTests
         using var db = CreateDb();
         var date = new DateOnly(2024, 1, 10);
         db.DailyLogs.Add(new DailyLog { Date = date, CaloriesKcal = 2800, IsCheatDay = true });
-        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 1800, CreatedAt = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) });
+        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 1800, EffectiveFrom = date, CreatedAt = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) });
         db.UserSettings.Add(new UserSettings { Id = 1, TdeeKcal = 2500 });
         await db.SaveChangesAsync();
 
@@ -170,7 +170,7 @@ public class CalorieLogServiceTests
         using var db = CreateDb();
         var date = new DateOnly(2024, 1, 10);
         db.DailyLogs.Add(new DailyLog { Date = date, CaloriesKcal = 2800, IsCheatDay = true });
-        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 1800, CreatedAt = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) });
+        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 1800, EffectiveFrom = date, CreatedAt = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) });
         // No UserSettings seeded → TdeeKcal = null
         await db.SaveChangesAsync();
 
@@ -196,7 +196,7 @@ public class CalorieLogServiceTests
         var date = new DateOnly(2024, 1, 10);
         var log = new DailyLog { Date = date, CaloriesKcal = 2000 };
         db.DailyLogs.Add(log);
-        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 1800, CreatedAt = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) });
+        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 1800, EffectiveFrom = date, CreatedAt = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) });
         await db.SaveChangesAsync();
 
         var result = await CreateService(db).EnrichLogsAsync([log]);
@@ -221,7 +221,7 @@ public class CalorieLogServiceTests
     {
         using var db = CreateDb();
         var date = new DateOnly(2024, 1, 10);
-        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 1800, CreatedAt = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) });
+        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 1800, EffectiveFrom = date, CreatedAt = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) });
         await db.SaveChangesAsync();
 
         var result = await CreateService(db).GetEffectiveTargetAsync(date, false);
@@ -234,7 +234,7 @@ public class CalorieLogServiceTests
     {
         using var db = CreateDb();
         var date = new DateOnly(2024, 1, 10);
-        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 1800, CreatedAt = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) });
+        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 1800, EffectiveFrom = date, CreatedAt = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) });
         db.UserSettings.Add(new UserSettings { Id = 1, TdeeKcal = 2500 });
         await db.SaveChangesAsync();
 
@@ -248,7 +248,7 @@ public class CalorieLogServiceTests
     {
         using var db = CreateDb();
         var date = new DateOnly(2024, 1, 10);
-        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 1800, CreatedAt = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) });
+        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 1800, EffectiveFrom = date, CreatedAt = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) });
         await db.SaveChangesAsync();
 
         var result = await CreateService(db).GetEffectiveTargetAsync(date, isCheatDay: true);
@@ -262,7 +262,7 @@ public class CalorieLogServiceTests
         using var db = CreateDb();
         var logDate = new DateOnly(2024, 1, 5);
         var goalDate = new DateOnly(2024, 1, 10);
-        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 1800, CreatedAt = goalDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) });
+        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 1800, EffectiveFrom = goalDate, CreatedAt = goalDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) });
         await db.SaveChangesAsync();
 
         var result = await CreateService(db).GetEffectiveTargetAsync(logDate, false);

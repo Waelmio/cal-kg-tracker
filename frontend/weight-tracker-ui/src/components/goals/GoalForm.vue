@@ -23,6 +23,7 @@
 </template>
 
 <script setup lang="ts">
+import { localToday, addDays } from '../../utils/dates'
 import { reactive, ref, computed } from 'vue'
 import { useGoalsStore } from '../../stores/goals'
 import { useDashboardStore } from '../../stores/dashboard'
@@ -39,7 +40,7 @@ const saving = ref(false)
 const error = ref('')
 const displayTarget = ref<number | ''>('')
 
-const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0]
+const tomorrow = addDays(localToday(), 1)
 const form = reactive({ targetDate: tomorrow, notes: '' })
 
 async function submit() {

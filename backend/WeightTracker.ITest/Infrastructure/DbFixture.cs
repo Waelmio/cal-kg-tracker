@@ -7,6 +7,7 @@ public static class DbFixture
         db.DailyLogs.RemoveRange(db.DailyLogs);
         db.Goals.RemoveRange(db.Goals);
         db.CalorieGoals.RemoveRange(db.CalorieGoals);
+        db.TdeeEntries.RemoveRange(db.TdeeEntries);
 
         // UserSettings row Id=1 must always exist (seeded by migration HasData).
         // Reset it to defaults rather than deleting.
@@ -16,6 +17,7 @@ public static class DbFixture
             settings.HeightCm = null;
             settings.PreferredUnit = "kg";
             settings.TdeeKcal = null;
+            settings.AveragingWeeks = 2;
         }
 
         await db.SaveChangesAsync();

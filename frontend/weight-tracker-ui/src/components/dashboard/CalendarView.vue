@@ -142,6 +142,7 @@
 </template>
 
 <script setup lang="ts">
+import { localToday } from '../../utils/dates'
 import { ref, computed } from 'vue'
 import type { DailyLog, CalorieGoal, Goal, WeightUnit } from '../../types'
 import { formatWeight } from '../../utils/units'
@@ -166,7 +167,7 @@ const props = defineProps<{
 
 const DAY_LABELS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
 
-const today = new Date(new Date().toLocaleDateString('en-CA') + 'T00:00:00Z')
+const today = new Date(localToday() + 'T00:00:00Z')
 const todayStr = today.toISOString().slice(0, 10)
 
 const selectedYear = ref(today.getUTCFullYear())

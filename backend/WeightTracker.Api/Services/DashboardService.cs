@@ -43,7 +43,7 @@ public class DashboardService(AppDbContext db, ICalorieLogService calorieLogServ
         var todayEnriched = allEnriched.FirstOrDefault(e => e.Log.Date == now);
         var currentWeight = allLogs.FirstOrDefault(l => l.WeightKg != null)?.WeightKg;
 
-        var calorieGoals = await db.CalorieGoals.OrderByDescending(g => g.CreatedAt).ToListAsync();
+        var calorieGoals = await db.CalorieGoals.OrderByDescending(g => g.EffectiveFrom).ThenByDescending(g => g.CreatedAt).ToListAsync();
 
         var weight = CalcWeightStats(allLogs, now);
         var weekly = CalcWeeklyCalorieStats(weekEnriched, settings.TdeeKcal, weekStart, calorieGoals);
@@ -161,8 +161,7 @@ public class DashboardService(AppDbContext db, ICalorieLogService calorieLogServ
         {
             var day = weekStart.AddDays(i);
             if (loggedDates.Contains(day)) continue;
-            var cutoff = day.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
-            var t = calorieGoals.FirstOrDefault(g => g.CreatedAt <= cutoff)?.TargetCalories;
+            var t = calorieGoals.FirstOrDefault(g => g.EffectiveFrom <= day)?.TargetCalories;
             if (t.HasValue) weekTargets.Add(t.Value);
         }
         int? avgTarget = weekTargets.Count > 0 ? (int)Math.Round(weekTargets.Average()) : null;

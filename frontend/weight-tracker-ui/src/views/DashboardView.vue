@@ -104,6 +104,7 @@
 </template>
 
 <script setup lang="ts">
+import { addDays, toLocalDateString } from '../utils/dates'
 import { ref, computed, onMounted } from 'vue'
 import { useDashboardStore } from '../stores/dashboard'
 import { useDailyLogStore } from '../stores/dailyLog'
@@ -216,9 +217,8 @@ async function onChartNeedFrom(from: string | null) {
 async function onNeedFrom(from: string) {
   const oldest = logStore.logs.length > 0 ? logStore.logs[logStore.logs.length - 1].date : null
   if (oldest == null || from < oldest) {
-    const d = new Date(from)
-    d.setDate(d.getDate() - 21) // fetch 3 extra weeks proactively
-    await logStore.fetchAll({ from: d.toISOString().slice(0, 10) })
+    // fetch 3 extra weeks proactively
+    await logStore.fetchAll({ from: addDays(from, -21) })
   }
 }
 
@@ -226,7 +226,7 @@ onMounted(async () => {
   const d = new Date()
   d.setMonth(d.getMonth() - 4)
   d.setDate(1)
-  const from = d.toISOString().slice(0, 10)
+  const from = toLocalDateString(d)
   await Promise.all([
     dashboard.fetch(),
     logStore.fetchAll({ from }),
