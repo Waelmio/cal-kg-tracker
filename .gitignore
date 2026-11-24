@@ -73,3 +73,8 @@ Thumbs.db
 *.db-wal
 .claude
 data/*
+# FatSecret test token
+scripts/.fatsecret-token.json
+
+# For things I work on but never want to commit
+worktree/
