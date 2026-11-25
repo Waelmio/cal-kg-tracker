@@ -33,7 +33,10 @@ namespace WeightTracker.Api.Migrations.Postgres
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("TargetCalories")
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("TargetCalories")
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
@@ -53,6 +56,9 @@ namespace WeightTracker.Api.Migrations.Postgres
 
                     b.Property<int?>("CaloriesKcal")
                         .HasColumnType("integer");
+
+                    b.Property<DateOnly?>("CaloriesSetOn")
+                        .HasColumnType("date");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -91,6 +97,20 @@ namespace WeightTracker.Api.Migrations.Postgres
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("EndReason")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<DateOnly?>("EndedOn")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasDefaultValue("Reach");
+
                     b.Property<string>("Notes")
                         .HasColumnType("text");
 
@@ -100,7 +120,7 @@ namespace WeightTracker.Api.Migrations.Postgres
                     b.Property<decimal?>("StartingWeightKg")
                         .HasColumnType("numeric");
 
-                    b.Property<DateOnly>("TargetDate")
+                    b.Property<DateOnly?>("TargetDate")
                         .HasColumnType("date");
 
                     b.Property<decimal>("TargetWeightKg")
@@ -113,6 +133,35 @@ namespace WeightTracker.Api.Migrations.Postgres
                     b.ToTable("Goals");
                 });
 
+            modelBuilder.Entity("WeightTracker.Api.Models.TdeeEntry", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<int>("Kcal")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EffectiveFrom");
+
+                    b.ToTable("TdeeEntries");
+                });
+
             modelBuilder.Entity("WeightTracker.Api.Models.UserSettings", b =>
                 {
                     b.Property<int>("Id")
@@ -121,15 +170,15 @@ namespace WeightTracker.Api.Migrations.Postgres
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("AveragingWeeks")
+                        .HasColumnType("integer");
+
                     b.Property<int?>("HeightCm")
                         .HasColumnType("integer");
 
                     b.Property<string>("PreferredUnit")
                         .IsRequired()
                         .HasColumnType("text");
-
-                    b.Property<int?>("TdeeKcal")
-                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
@@ -139,6 +188,7 @@ namespace WeightTracker.Api.Migrations.Postgres
                         new
                         {
                             Id = 1,
+                            AveragingWeeks = 2,
                             PreferredUnit = "kg"
                         });
                 });

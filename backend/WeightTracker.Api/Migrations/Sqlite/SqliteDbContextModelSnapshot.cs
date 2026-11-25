@@ -27,7 +27,10 @@ namespace WeightTracker.Api.Migrations.Sqlite
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("TargetCalories")
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("TargetCalories")
                         .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
@@ -45,6 +48,9 @@ namespace WeightTracker.Api.Migrations.Sqlite
 
                     b.Property<int?>("CaloriesKcal")
                         .HasColumnType("INTEGER");
+
+                    b.Property<DateOnly?>("CaloriesSetOn")
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("CreatedAt")
                         .IsRequired()
@@ -84,6 +90,20 @@ namespace WeightTracker.Api.Migrations.Sqlite
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("EndReason")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("EndedOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("Reach");
+
                     b.Property<string>("Notes")
                         .HasColumnType("TEXT");
 
@@ -93,7 +113,7 @@ namespace WeightTracker.Api.Migrations.Sqlite
                     b.Property<decimal?>("StartingWeightKg")
                         .HasColumnType("TEXT");
 
-                    b.Property<DateOnly>("TargetDate")
+                    b.Property<DateOnly?>("TargetDate")
                         .HasColumnType("TEXT");
 
                     b.Property<decimal>("TargetWeightKg")
@@ -106,10 +126,41 @@ namespace WeightTracker.Api.Migrations.Sqlite
                     b.ToTable("Goals");
                 });
 
+            modelBuilder.Entity("WeightTracker.Api.Models.TdeeEntry", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CreatedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Kcal")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EffectiveFrom");
+
+                    b.ToTable("TdeeEntries");
+                });
+
             modelBuilder.Entity("WeightTracker.Api.Models.UserSettings", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("AveragingWeeks")
                         .HasColumnType("INTEGER");
 
                     b.Property<int?>("HeightCm")
@@ -119,9 +170,6 @@ namespace WeightTracker.Api.Migrations.Sqlite
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<int?>("TdeeKcal")
-                        .HasColumnType("INTEGER");
-
                     b.HasKey("Id");
 
                     b.ToTable("UserSettings");
@@ -130,6 +178,7 @@ namespace WeightTracker.Api.Migrations.Sqlite
                         new
                         {
                             Id = 1,
+                            AveragingWeeks = 2,
                             PreferredUnit = "kg"
                         });
                 });

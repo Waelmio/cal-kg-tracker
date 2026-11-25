@@ -50,7 +50,7 @@ make test-frontend # Frontend only (Vitest)
 - Log daily weight and calories independently (one row per day, both fields nullable)
 - Set weight goals — active goal is always the most recent entry
 - Set daily calorie targets — same history pattern as weight goals
-- Dashboard with 7-day weight trend, weekly avg calories, goal progress, and projected goal date
+- Dashboard with a daily budget that keeps your calorie target on average over 1 to 5 weeks, calendar with week and month summaries, weight pace, TDEE estimate and goal projection
 - TDEE estimation via linear regression on logged weight and calorie data
 - Weight history chart (Chart.js)
 - kg / lbs unit toggle — weight stored internally as kg, converted at display time

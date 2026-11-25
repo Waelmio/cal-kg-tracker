@@ -1,61 +1,67 @@
 <template>
-  <form @submit.prevent="submit" class="space-y-4">
-    <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">
-        Target Weight ({{ unit }})
-      </label>
-      <input v-model.number="displayTarget" type="number" step="0.1" min="1" max="700"
-        class="input" required placeholder="e.g. 70" />
+  <form class="form" @submit.prevent="submit">
+    <div class="f"><label for="gt">Target weight ({{ unit }})</label><input id="gt" v-model="target" inputmode="decimal" required /></div>
+    <div class="f"><label for="gd">Target date</label><input id="gd" v-model="targetDate" type="date" :min="addDays(startDate, 1)" required /></div>
+    <div class="f"><label for="gs">Start date</label><input id="gs" v-model="startDate" type="date" :max="app.today" /></div>
+    <div class="f">
+      <label for="gw">Starting weight ({{ unit }})</label>
+      <input id="gw" v-model="startWeight" inputmode="decimal" />
+      <span class="hint">{{ startWeight.trim() === '' ? 'From your weigh-ins on the start date' : 'Typed by you' }}</span>
     </div>
-    <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">Target Date</label>
-      <input v-model="form.targetDate" type="date" class="input" required :min="tomorrow" />
+    <div class="f wide"><label for="gn">Note</label><textarea id="gn" v-model="notes" rows="2" maxlength="500" /></div>
+    <p v-if="error" role="alert" class="error wide">{{ error }}</p>
+    <div class="wide row">
+      <button type="submit" class="primary" :disabled="saving">{{ saving ? 'Saving…' : goal ? 'Save goal' : 'Set goal' }}</button>
+      <button type="button" class="cancel" @click="$emit('cancel')">Cancel</button>
     </div>
-    <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
-      <textarea v-model="form.notes" class="input" rows="2" />
-    </div>
-    <button type="submit" class="btn-primary w-full" :disabled="saving">
-      {{ saving ? 'Saving…' : 'Set Goal' }}
-    </button>
-    <p v-if="error" class="text-red-500 text-sm">{{ error }}</p>
   </form>
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, computed } from 'vue'
-import { useGoalsStore } from '../../stores/goals'
-import { useDashboardStore } from '../../stores/dashboard'
-import { useSettingsStore } from '../../stores/settings'
-import { toKg } from '../../utils/units'
+import { computed, ref } from 'vue'
+import { useAppStore } from '../../stores/app'
+import * as goalsApi from '../../api/goals'
+import { addDays } from '../../utils/dates'
+import { displayWeight, toKg } from '../../utils/units'
+import type { Goal } from '../../types'
 
-const emit = defineEmits<{ submitted: [] }>()
-const store = useGoalsStore()
-const dashboard = useDashboardStore()
-const settingsStore = useSettingsStore()
-const unit = computed(() => settingsStore.settings.preferredUnit)
+const props = defineProps<{ goal?: Goal | null }>()
+const emit = defineEmits<{ saved: []; cancel: [] }>()
 
+const app = useAppStore()
+const unit = computed(() => app.unit)
+const fmt = (kg: number | null | undefined) => (kg == null ? '' : String(Math.round(displayWeight(kg, unit.value) * 10) / 10))
+
+const target = ref(fmt(props.goal?.targetWeightKg))
+const targetDate = ref(props.goal?.targetDate ?? '')
+const startDate = ref(props.goal?.startDate ?? app.today)
+const startWeight = ref(fmt(props.goal?.startingWeightKg))
+const notes = ref(props.goal?.notes ?? '')
 const saving = ref(false)
 const error = ref('')
-const displayTarget = ref<number | ''>('')
 
-const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0]
-const form = reactive({ targetDate: tomorrow, notes: '' })
+const num = (t: string) => Number(t.trim().replace(',', '.'))
 
 async function submit() {
-  if (!displayTarget.value) return
-  saving.value = true
   error.value = ''
+  if (!Number.isFinite(num(target.value)) || num(target.value) <= 0) { error.value = 'Enter a target weight.'; return }
+  if (!targetDate.value) { error.value = 'Pick a target date.'; return }
+  saving.value = true
   try {
-    await store.create({
-      targetWeightKg: toKg(Number(displayTarget.value), unit.value),
-      targetDate: form.targetDate,
-      notes: form.notes || undefined,
-    })
-    await dashboard.fetch()
-    emit('submitted')
-    displayTarget.value = ''
-    form.notes = ''
+    const startingWeightKg = startWeight.value.trim() === '' ? undefined : toKg(num(startWeight.value), unit.value)
+    if (props.goal) {
+      await goalsApi.update(props.goal.id, {
+        targetWeightKg: toKg(num(target.value), unit.value), targetDate: targetDate.value, startDate: startDate.value,
+        startingWeightKg: startingWeightKg ?? props.goal.startingWeightKg, notes: notes.value.trim() || null,
+      })
+    } else {
+      await goalsApi.create({
+        targetWeightKg: toKg(num(target.value), unit.value), targetDate: targetDate.value, startDate: startDate.value,
+        startingWeightKg, notes: notes.value.trim() || undefined,
+      })
+    }
+    app.refresh()
+    emit('saved')
   } catch (e) {
     error.value = (e as Error).message
   } finally {
@@ -63,3 +69,17 @@ async function submit() {
   }
 }
 </script>
+
+<style scoped>
+.form { background: #fff; border: 1px solid #bae6fd; border-radius: 10px; padding: 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 14px; }
+.f { display: flex; flex-direction: column; gap: 6px; }
+.wide { grid-column: 1 / -1; }
+label { font-weight: 600; }
+input, textarea { box-sizing: border-box; width: 100%; height: 46px; border: 1px solid #9ca3af; border-radius: 8px; padding: 0 12px; font: inherit; }
+textarea { height: auto; padding: 10px 12px; }
+.hint { font-size: 13px; color: #4b5563; }
+.row { display: flex; gap: 10px; }
+.primary { min-height: 44px; padding: 0 18px; border: 0; border-radius: 8px; background: #0369a1; color: #fff; font: inherit; font-weight: 600; }
+.cancel { min-height: 44px; padding: 0 18px; border: 1px solid #9ca3af; border-radius: 8px; background: #fff; color: #1f2937; font: inherit; font-weight: 600; }
+.error { margin: 0; color: #a50036; background: #ffe4e6; padding: 10px 12px; border-radius: 8px; }
+</style>

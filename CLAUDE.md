@@ -34,55 +34,38 @@ pnpm test         # Run Vitest tests
 
 ### Data Model
 
-The core entity is `DailyLog` — one row per calendar day with nullable `WeightKg` and `CaloriesKcal`. Both fields are independent: you can log only weight, only calories, or both. Deleting a field nulls it; the row is automatically removed when both become null.
+`DailyLog`: one row per calendar day with nullable `WeightKg` (2 decimals), `CaloriesKcal`, `Notes`, `IsCheatDay` and `CaloriesSetOn` (local date the calories value last changed). 0 kcal is a real value; empty means not logged. Nothing is stored for a day nobody logged: planned days are computed, never stored. `PUT` replaces the whole day; the row is removed when nothing is left.
 
-`Goal` holds a single weight target. The active goal is always the most recent row (ordered by `CreatedAt` desc) — no `IsActive` flag. Creating a new goal does not remove the old one; they coexist in history.
+`Goal` (weight): `Kind` (`Reach`/`Maintain`), nullable `TargetDate`, `EndedOn`/`EndReason`. Active = newest with `EndedOn == null`. Ended goals never revive.
+`CalorieGoal`: `EffectiveFrom` date, nullable target (null = off). `TdeeEntry`: TDEE history, `EffectiveFrom`. `UserSettings`: singleton, `HeightCm`, `PreferredUnit`, `AveragingWeeks` (1 to 5).
 
-`CalorieGoal` tracks daily calorie targets as a history (same pattern as `Goal` — active = most recent by `CreatedAt` desc, old entries coexist).
-
-`UserSettings` is a singleton (always `Id = 1`) seeded at migration time. It holds `HeightCm`, `PreferredUnit` (`kg`/`lbs`), and a cached `Tdee` value.
+The calorie target is met **on average** over `AveragingWeeks`, not daily.
 
 ### Backend
 
-Service-controller pattern. Controllers are thin wrappers; all logic lives in services.
-
-- `Data/AppDbContext.cs` — EF Core context with unique index on `DailyLog.Date`. Auto-migrates at startup via `db.Database.Migrate()` in `Program.cs`.
-- `Services/DailyLogService.cs` — `UpsertAsync` creates or updates the day's row, only touching fields that are provided. `DeleteWeightAsync` / `DeleteCaloriesAsync` null the respective field and remove the row if both are null.
-- `Services/DashboardService.cs` — all aggregation happens server-side: 7-day weight trend, weekly avg calories, goal progress %, projected goal date (extrapolated from 7-day weight rate).
-- `Services/TdeeComputationService.cs` — linear regression on weight vs. time; requires ≥7 calorie logs and ≥3 weight logs. Uses 7700 kcal/kg conversion factor.
-- Weight is always stored and transmitted in kg. Unit conversion is a display concern only.
-- SQLite database file: `backend/WeightTracker.Api/weighttracker.db` (created at runtime).
-- CORS allows `http://localhost:5173` and `http://localhost:4173` (configured via `AllowedOrigins` in `appsettings.json`).
-
-### API Endpoints
-
-| Method | Path | Notes |
-|---|---|---|
-| GET/PUT | `/api/daily-logs` / `/api/daily-logs/{date}` | date = `yyyy-MM-dd` |
-| DELETE | `/api/daily-logs/{date}` | whole day |
-| DELETE | `/api/daily-logs/{date}/weight` | weight only |
-| DELETE | `/api/daily-logs/{date}/calories` | calories only |
-| GET/POST/DELETE | `/api/goals/active`, `/api/goals`, `/api/goals/{id}` | |
-| GET/POST/DELETE | `/api/calorie-goals/active`, `/api/calorie-goals`, `/api/calorie-goals/{id}` | |
-| GET | `/api/dashboard` | single aggregated response |
-| GET | `/api/tdee` | TDEE estimate via linear regression |
-| GET/PUT | `/api/settings` | |
+Controllers are thin. All statistics live in `Stats/`:
+- `StatsCalculator.cs`: pure functions over `StatsData` (week/month figures, status colors, budget, streak, pace, TDEE estimate, diet effect). Rules and constants: `worktree/redesign/PLAN.md` section 3 (git-ignored, local).
+- `GoalStatusCalculator.cs`, `StatsService.cs` (loads data, builds DTOs), `Controllers/StatsController.cs`.
+- Tests: `WeightTracker.UTest/Fixtures/fixture.json` with today = 2026-11-24 (expected values in `StatsCalculatorTests`, repeated end to end in `WeightTracker.ITest/Tests/StatsEndpointTests.cs` on SQLite and Postgres).
+- Migrations in `Migrations/Sqlite` and `Migrations/Postgres`; `MigrationTests` migrates a legacy-shaped database. Run automatically at startup.
+- `DailyLogService.SetCaloriesAsync/SetWeightAsync` are single-field writes for imports.
+- The target in force on a day (cheat day, TDEE) is only computed in `StatsCalculator.Target`.
+- Weight is stored in kg. Unit conversion is display only. The client sends its local date as `today`; it is required wherever the date matters.
 
 ### Frontend
 
-Pinia stores mediate all API calls. Views call store actions; components read from store state. The dashboard store is refreshed after any mutation via `await dashboard.fetch()`.
-
-- `src/api/dailyLog.ts` — mirrors the backend's independent weight/calorie delete endpoints.
-- `src/stores/dailyLog.ts` — `upsert` keeps the local list sorted by date desc after every write.
-- `src/utils/units.ts` — all weight conversion logic (`displayWeight`, `toKg`, `formatWeight`, `bmiLabel`). Weight travels as kg everywhere; convert only at the UI boundary.
-- `src/style.css` — global Tailwind `@layer components` defines `.input`, `.btn-primary`, `.btn-secondary`, `.label`.
-- Vite proxies `/api` → `http://localhost:5118` in dev (configured in `vite.config.ts`).
+Vue 3 + Pinia. No statistic is computed in the frontend; it formats what `/api/stats/*` returns.
+- `stores/app.ts`: settings, local `today`, and `version`; every mutation calls `refresh()` and views refetch via `composables/useAsyncData.ts`.
+- `stores/logSheet.ts` + `components/daylog/LogSheet.vue`: the single log dialog (full screen below 640 px). Its data is one request per week (`/api/stats/log-week`), kept in `stores/logWeeks.ts` until anything changes (`composables/useKeyedCache.ts`, also behind `stores/calendarMonths.ts`, which preloads the months around the one shown). The "rest of the week" hint is the only figure computed in the UI (on request).
+- `components/ui/`: `Tile`, `TileRow`, `StatusChip`, `InfoTip`, `Modal`, `ErrorNote`, `Skeleton`.
+- Scoped class names must not be Tailwind utilities (`outline`, `label`, `table`...): Tailwind would style them too.
+- `utils/dates.ts` (local dates), `utils/format.ts` (wording, colors), `utils/units.ts`, `utils/chart.ts` (time-axis geometry).
 
 ### Pages
 
-| Route | View | Purpose |
-|---|---|---|
-| `/` | `DashboardView` | Stats, calorie bar, weight chart, goal progress |
-| `/log` | `LogView` | Log/edit weight + calories for any date |
-| `/history` | `HistoryView` | Full log table + chart, inline edit |
-| `/goal` | `GoalView` | Set/replace weight goal |
+| Route | View |
+|---|---|
+| `/` | `DashboardView`: tiles, calendar, average chart, goal card |
+| `/history` | `HistoryView` (`/log` redirects here) |
+| `/goals` | `GoalsView`: weight goal, calorie target, TDEE (`/goal` redirects here) |
+| `/settings` | `SettingsView` |

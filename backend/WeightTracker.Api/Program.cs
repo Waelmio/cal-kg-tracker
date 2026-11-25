@@ -4,7 +4,8 @@ using WeightTracker.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -39,14 +40,13 @@ else
     builder.Services.AddScoped<AppDbContext>(sp => sp.GetRequiredService<SqliteDbContext>());
 }
 
-builder.Services.AddScoped<ICalorieLogService, CalorieLogService>();
 builder.Services.AddScoped<IDailyLogService, DailyLogService>();
 builder.Services.AddScoped<IGoalService, GoalService>();
 builder.Services.AddScoped<ICalorieGoalService, CalorieGoalService>();
-builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<ISettingsService, SettingsService>();
-builder.Services.AddScoped<ITdeeComputationService, TdeeComputationService>();
 builder.Services.AddScoped<IDataService, DataService>();
+builder.Services.AddScoped<ITdeeEntryService, TdeeEntryService>();
+builder.Services.AddScoped<WeightTracker.Api.Stats.IStatsService, WeightTracker.Api.Stats.StatsService>();
 
 var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? [];
 builder.Services.AddCors(options =>

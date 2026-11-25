@@ -8,365 +8,221 @@ namespace WeightTracker.UTest;
 
 public class DailyLogServiceTests
 {
+    private static readonly DateOnly Today = new(2026, 11, 24);
+
     private static AppDbContext CreateDb()
     {
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .Options;
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
         return new AppDbContext(options);
     }
 
-    private static DailyLogService CreateService(AppDbContext db) =>
-        new(db, new CalorieLogService(db));
+    private static DailyLogService CreateService(AppDbContext db) => new(db);
 
-    // ── GetAllAsync ───────────────────────────────────────────────────────────
+    private static UpsertDailyLogDto Put(string date, decimal? kg = null, int? kcal = null, string? notes = null, bool cheat = false) =>
+        new(date, kg, kcal, notes, cheat);
+
+    // ── GetAll / GetByDate ────────────────────────────────────────────────────
 
     [Fact]
     public async Task GetAllAsync_ReturnsEmpty_WhenNoLogs()
     {
         using var db = CreateDb();
-        var result = await CreateService(db).GetAllAsync(null, null, null);
-        Assert.Empty(result);
+        Assert.Empty(await CreateService(db).GetAllAsync(null, null, null));
     }
 
     [Fact]
-    public async Task GetAllAsync_ReturnsLogsOrderedByDateDesc()
+    public async Task GetAllAsync_ReturnsLogsOrderedByDateDesc_AndFiltersByRangeAndLimit()
     {
         using var db = CreateDb();
         var svc = CreateService(db);
-        await svc.UpsertAsync(new UpsertDailyLogDto("2024-01-10", 75m, null, null));
-        await svc.UpsertAsync(new UpsertDailyLogDto("2024-01-15", 74m, null, null));
-        await svc.UpsertAsync(new UpsertDailyLogDto("2024-01-12", 74.5m, null, null));
+        foreach (var d in new[] { "2024-01-10", "2024-01-15", "2024-01-12" })
+            await svc.UpsertAsync(Put(d, kg: 75m), Today);
 
-        var result = await svc.GetAllAsync(null, null, null);
+        var all = await svc.GetAllAsync(null, null, null);
+        Assert.Equal(new[] { "2024-01-15", "2024-01-12", "2024-01-10" }, all.Select(l => l.Date));
 
-        Assert.Equal(3, result.Count);
-        Assert.Equal("2024-01-15", result[0].Date);
-        Assert.Equal("2024-01-12", result[1].Date);
-        Assert.Equal("2024-01-10", result[2].Date);
+        var range = await svc.GetAllAsync(new DateOnly(2024, 1, 11), new DateOnly(2024, 1, 14), null);
+        Assert.Single(range);
+        Assert.Equal(2, (await svc.GetAllAsync(null, null, 2)).Count);
     }
 
     [Fact]
-    public async Task GetAllAsync_FiltersFromDate()
+    public async Task GetByDateAsync_ReturnsNull_WhenMissing()
+    {
+        using var db = CreateDb();
+        Assert.Null(await CreateService(db).GetByDateAsync(new DateOnly(2024, 1, 1)));
+    }
+
+    // ── Full replace ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Upsert_CreatesTheDay()
+    {
+        using var db = CreateDb();
+        var saved = await CreateService(db).UpsertAsync(Put("2024-03-01", 80.256m, 1900, "ok"), Today);
+
+        Assert.Equal(80.26m, saved!.WeightKg);                 // 2 decimals
+        Assert.Equal(1900, saved.CaloriesKcal);
+        Assert.Equal("ok", saved.Notes);
+        Assert.Equal(Today, saved.CaloriesSetOn);
+    }
+
+    [Fact]
+    public async Task Upsert_ReplacesTheWholeDay_NullClearsAField()
     {
         using var db = CreateDb();
         var svc = CreateService(db);
-        await svc.UpsertAsync(new UpsertDailyLogDto("2024-01-10", 75m, null, null));
-        await svc.UpsertAsync(new UpsertDailyLogDto("2024-01-15", 74m, null, null));
+        await svc.UpsertAsync(Put("2024-03-01", 80m, 1900, "note", cheat: true), Today);
 
-        var result = await svc.GetAllAsync(new DateOnly(2024, 1, 12), null, null);
+        var saved = await svc.UpsertAsync(Put("2024-03-01", kg: null, kcal: 2000, notes: null, cheat: false), Today);
 
-        Assert.Single(result);
-        Assert.Equal("2024-01-15", result[0].Date);
+        Assert.Null(saved!.WeightKg);
+        Assert.Equal(2000, saved.CaloriesKcal);
+        Assert.Null(saved.Notes);
+        Assert.False(saved.IsCheatDay);
+        Assert.Equal(1, await db.DailyLogs.CountAsync());
     }
 
     [Fact]
-    public async Task GetAllAsync_FiltersToDate()
+    public async Task Upsert_ZeroKcalIsARealValue()
+    {
+        using var db = CreateDb();
+        var saved = await CreateService(db).UpsertAsync(Put("2024-03-01", kcal: 0), Today);
+        Assert.Equal(0, saved!.CaloriesKcal);
+        Assert.Equal(0, (await db.DailyLogs.SingleAsync()).CaloriesKcal);
+    }
+
+    [Fact]
+    public async Task Upsert_RemovingOneFieldNeverDeletesTheNote()
     {
         using var db = CreateDb();
         var svc = CreateService(db);
-        await svc.UpsertAsync(new UpsertDailyLogDto("2024-01-10", 75m, null, null));
-        await svc.UpsertAsync(new UpsertDailyLogDto("2024-01-15", 74m, null, null));
+        await svc.UpsertAsync(Put("2024-03-01", 80m, 1900, "keep me"), Today);
 
-        var result = await svc.GetAllAsync(null, new DateOnly(2024, 1, 12), null);
+        var saved = await svc.UpsertAsync(Put("2024-03-01", kg: null, kcal: null, notes: "keep me"), Today);
 
-        Assert.Single(result);
-        Assert.Equal("2024-01-10", result[0].Date);
+        Assert.NotNull(saved);
+        Assert.Equal("keep me", (await db.DailyLogs.SingleAsync()).Notes);
     }
 
     [Fact]
-    public async Task GetAllAsync_RespectsLimit()
+    public async Task Upsert_WithNothingLeft_RemovesTheRow_AndReturnsNull()
     {
         using var db = CreateDb();
         var svc = CreateService(db);
-        await svc.UpsertAsync(new UpsertDailyLogDto("2024-01-10", 75m, null, null));
-        await svc.UpsertAsync(new UpsertDailyLogDto("2024-01-11", 74.5m, null, null));
-        await svc.UpsertAsync(new UpsertDailyLogDto("2024-01-12", 74m, null, null));
+        await svc.UpsertAsync(Put("2024-03-01", 80m, 1900), Today);
 
-        var result = await svc.GetAllAsync(null, null, 2);
-
-        Assert.Equal(2, result.Count);
-        Assert.Equal("2024-01-12", result[0].Date);
-        Assert.Equal("2024-01-11", result[1].Date);
+        Assert.Null(await svc.UpsertAsync(Put("2024-03-01"), Today));
+        Assert.Empty(await db.DailyLogs.ToListAsync());
+        Assert.Null(await svc.UpsertAsync(Put("2024-03-02", notes: "  "), Today));   // nothing was ever stored
+        Assert.Empty(await db.DailyLogs.ToListAsync());
     }
 
     [Fact]
-    public async Task GetAllAsync_IncludesCalorieTarget()
+    public async Task Upsert_CheatMarkAloneKeepsTheRow()
     {
         using var db = CreateDb();
-        var date = new DateOnly(2024, 1, 10);
-        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 1800, CreatedAt = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) });
+        var saved = await CreateService(db).UpsertAsync(Put("2024-03-01", cheat: true), Today);
+        Assert.True(saved!.IsCheatDay);
+        Assert.Equal(1, await db.DailyLogs.CountAsync());
+    }
+
+    // ── CaloriesSetOn ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task CaloriesSetOn_IsTheDayTheValueChanged_NotTheDayOfTheLog()
+    {
+        using var db = CreateDb();
+        var svc = CreateService(db);
+
+        // Tuesday: log Saturday in advance
+        var tuesday = new DateOnly(2026, 11, 24);
+        var saved = await svc.UpsertAsync(Put("2026-11-28", kcal: 2500), tuesday);
+        Assert.Equal(tuesday, saved!.CaloriesSetOn);
+
+        // Wednesday: only a weight and a note change, the calories value is the same
+        var wednesday = tuesday.AddDays(1);
+        saved = await svc.UpsertAsync(Put("2026-11-28", kg: 80m, kcal: 2500, notes: "x"), wednesday);
+        Assert.Equal(tuesday, saved!.CaloriesSetOn);
+
+        // Thursday: the value itself changes
+        saved = await svc.UpsertAsync(Put("2026-11-28", kg: 80m, kcal: 2400, notes: "x"), wednesday.AddDays(1));
+        Assert.Equal(wednesday.AddDays(1), saved!.CaloriesSetOn);
+    }
+
+    [Fact]
+    public async Task CaloriesSetOn_IsClearedWithTheCalories()
+    {
+        using var db = CreateDb();
+        var svc = CreateService(db);
+        await svc.UpsertAsync(Put("2026-11-20", kg: 80m, kcal: 2000), Today);
+        var saved = await svc.UpsertAsync(Put("2026-11-20", kg: 80m), Today);
+        Assert.Null(saved!.CaloriesSetOn);
+    }
+
+    // ── Delete entry ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task DeleteDay_RemovesEverything_NoteAndCheatMarkIncluded()
+    {
+        using var db = CreateDb();
+        var svc = CreateService(db);
+        await svc.UpsertAsync(Put("2024-03-01", 80m, 1900, "note", cheat: true), Today);
+
+        Assert.True(await svc.DeleteDayAsync(new DateOnly(2024, 3, 1)));
+        Assert.Empty(await db.DailyLogs.ToListAsync());
+        Assert.False(await svc.DeleteDayAsync(new DateOnly(2024, 3, 1)));
+    }
+
+    // ── Single-field writes (for imports) ─────────────────────────────────────
+
+    [Fact]
+    public async Task SetCalories_TouchesOnlyCalories()
+    {
+        using var db = CreateDb();
+        var svc = CreateService(db);
+        await svc.UpsertAsync(Put("2026-11-20", 80m, null, "note", cheat: true), Today);
+
+        var saved = await svc.SetCaloriesAsync(new DateOnly(2026, 11, 20), 1750, Today);
+
+        Assert.Equal(1750, saved.CaloriesKcal);
+        Assert.Equal(80m, saved.WeightKg);
+        Assert.Equal("note", saved.Notes);
+        Assert.True(saved.IsCheatDay);
+        Assert.Equal(Today, saved.CaloriesSetOn);
+    }
+
+    [Fact]
+    public async Task SetCalories_CreatesTheRow_AndKeepsSetOnWhenTheValueIsUnchanged()
+    {
+        using var db = CreateDb();
+        var svc = CreateService(db);
+        var first = await svc.SetCaloriesAsync(new DateOnly(2026, 11, 20), 1750, Today);
+        var again = await svc.SetCaloriesAsync(new DateOnly(2026, 11, 20), 1750, Today.AddDays(1));
+        Assert.Equal(first.CaloriesSetOn, again.CaloriesSetOn);
+        Assert.Equal(1, await db.DailyLogs.CountAsync());
+    }
+
+    [Fact]
+    public async Task SetWeight_TouchesOnlyWeight()
+    {
+        using var db = CreateDb();
+        var svc = CreateService(db);
+        await svc.UpsertAsync(Put("2026-11-20", kcal: 1800), Today);
+
+        var saved = await svc.SetWeightAsync(new DateOnly(2026, 11, 20), 81.234m);
+
+        Assert.Equal(81.23m, saved.WeightKg);
+        Assert.Equal(1800, saved.CaloriesKcal);
+    }
+
+    [Fact]
+    public async Task NothingIsStoredForADayNobodyLogged()
+    {
+        using var db = CreateDb();
+        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 1900, EffectiveFrom = new DateOnly(2024, 1, 1) });
         await db.SaveChangesAsync();
-        var svc = CreateService(db);
-        await svc.UpsertAsync(new UpsertDailyLogDto("2024-01-10", null, 2000, null));
-
-        var result = await svc.GetAllAsync(null, null, null);
-
-        Assert.Equal(1800, result[0].CalorieTarget);
-    }
-
-    // ── GetByDateAsync ────────────────────────────────────────────────────────
-
-    [Fact]
-    public async Task GetByDateAsync_ReturnsNull_WhenNotFound()
-    {
-        using var db = CreateDb();
-        var result = await CreateService(db).GetByDateAsync(new DateOnly(2024, 1, 10));
-        Assert.Null(result);
-    }
-
-    [Fact]
-    public async Task GetByDateAsync_ReturnsDto_WithCalorieTarget()
-    {
-        using var db = CreateDb();
-        var date = new DateOnly(2024, 1, 10);
-        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 1800, CreatedAt = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) });
-        await db.SaveChangesAsync();
-        var svc = CreateService(db);
-        await svc.UpsertAsync(new UpsertDailyLogDto("2024-01-10", 75m, 2000, null));
-
-        var result = await svc.GetByDateAsync(date);
-
-        Assert.NotNull(result);
-        Assert.Equal("2024-01-10", result.Date);
-        Assert.Equal(75m, result.WeightKg);
-        Assert.Equal(2000, result.CaloriesKcal);
-        Assert.Equal(1800, result.CalorieTarget);
-    }
-
-    // ── UpsertAsync ───────────────────────────────────────────────────────────
-
-    [Fact]
-    public async Task UpsertAsync_CreatesNewLog()
-    {
-        using var db = CreateDb();
-        var result = await CreateService(db).UpsertAsync(new UpsertDailyLogDto("2024-01-10", 75m, 2000, null));
-
-        Assert.Equal("2024-01-10", result.Date);
-        Assert.Equal(75m, result.WeightKg);
-        Assert.Equal(2000, result.CaloriesKcal);
-        Assert.Equal(1, await db.DailyLogs.CountAsync());
-    }
-
-    [Fact]
-    public async Task UpsertAsync_UpdatesExistingLog()
-    {
-        using var db = CreateDb();
-        var svc = CreateService(db);
-        await svc.UpsertAsync(new UpsertDailyLogDto("2024-01-10", 75m, null, null));
-
-        var result = await svc.UpsertAsync(new UpsertDailyLogDto("2024-01-10", 74m, 2000, null));
-
-        Assert.Equal(74m, result.WeightKg);
-        Assert.Equal(2000, result.CaloriesKcal);
-        Assert.Equal(1, await db.DailyLogs.CountAsync());
-    }
-
-    [Fact]
-    public async Task UpsertAsync_DoesNotOverwriteExistingWeight_WhenOnlyCaloriesProvided()
-    {
-        using var db = CreateDb();
-        var svc = CreateService(db);
-        await svc.UpsertAsync(new UpsertDailyLogDto("2024-01-10", 75m, null, null));
-
-        var result = await svc.UpsertAsync(new UpsertDailyLogDto("2024-01-10", null, 2000, null));
-
-        Assert.Equal(75m, result.WeightKg);
-        Assert.Equal(2000, result.CaloriesKcal);
-    }
-
-    // ── DeleteDayAsync ────────────────────────────────────────────────────────
-
-    [Fact]
-    public async Task DeleteDayAsync_ReturnsFalse_WhenNotFound()
-    {
-        using var db = CreateDb();
-        var result = await CreateService(db).DeleteDayAsync(new DateOnly(2024, 1, 10));
-        Assert.False(result);
-    }
-
-    [Fact]
-    public async Task DeleteDayAsync_DeletesLog_ReturnsTrue()
-    {
-        using var db = CreateDb();
-        var svc = CreateService(db);
-        await svc.UpsertAsync(new UpsertDailyLogDto("2024-01-10", 75m, null, null));
-
-        var result = await svc.DeleteDayAsync(new DateOnly(2024, 1, 10));
-
-        Assert.True(result);
-        Assert.Equal(0, await db.DailyLogs.CountAsync());
-    }
-
-    // ── DeleteWeightAsync ─────────────────────────────────────────────────────
-
-    [Fact]
-    public async Task DeleteWeightAsync_ReturnsNull_WhenLogNotFound()
-    {
-        using var db = CreateDb();
-        var result = await CreateService(db).DeleteWeightAsync(new DateOnly(2024, 1, 10));
-        Assert.Null(result);
-    }
-
-    [Fact]
-    public async Task DeleteWeightAsync_NullsWeight_KeepsLog_WhenCaloriesRemain()
-    {
-        using var db = CreateDb();
-        var svc = CreateService(db);
-        await svc.UpsertAsync(new UpsertDailyLogDto("2024-01-10", 75m, 2000, null));
-
-        var result = await svc.DeleteWeightAsync(new DateOnly(2024, 1, 10));
-
-        Assert.NotNull(result);
-        Assert.Null(result.WeightKg);
-        Assert.Equal(2000, result.CaloriesKcal);
-        Assert.Equal(1, await db.DailyLogs.CountAsync());
-    }
-
-    [Fact]
-    public async Task DeleteWeightAsync_DeletesRow_WhenBothFieldsBecomeNull()
-    {
-        using var db = CreateDb();
-        var svc = CreateService(db);
-        await svc.UpsertAsync(new UpsertDailyLogDto("2024-01-10", 75m, null, null));
-
-        var result = await svc.DeleteWeightAsync(new DateOnly(2024, 1, 10));
-
-        Assert.Null(result);
-        Assert.Equal(0, await db.DailyLogs.CountAsync());
-    }
-
-    [Fact]
-    public async Task DeleteWeightAsync_KeepsRow_WhenCheatDay_EvenIfBothFieldsNull()
-    {
-        using var db = CreateDb();
-        var svc = CreateService(db);
-        await svc.UpsertAsync(new UpsertDailyLogDto("2024-01-10", 75m, null, null));
-        await svc.SetCheatDayAsync(new DateOnly(2024, 1, 10), true);
-
-        var result = await svc.DeleteWeightAsync(new DateOnly(2024, 1, 10));
-
-        Assert.NotNull(result);
-        Assert.True(result.IsCheatDay);
-        Assert.Equal(1, await db.DailyLogs.CountAsync());
-    }
-
-    // ── DeleteCaloriesAsync ───────────────────────────────────────────────────
-
-    [Fact]
-    public async Task DeleteCaloriesAsync_ReturnsNull_WhenLogNotFound()
-    {
-        using var db = CreateDb();
-        var result = await CreateService(db).DeleteCaloriesAsync(new DateOnly(2024, 1, 10));
-        Assert.Null(result);
-    }
-
-    [Fact]
-    public async Task DeleteCaloriesAsync_NullsCalories_KeepsLog_WhenWeightRemains()
-    {
-        using var db = CreateDb();
-        var svc = CreateService(db);
-        await svc.UpsertAsync(new UpsertDailyLogDto("2024-01-10", 75m, 2000, null));
-
-        var result = await svc.DeleteCaloriesAsync(new DateOnly(2024, 1, 10));
-
-        Assert.NotNull(result);
-        Assert.Equal(75m, result.WeightKg);
-        Assert.Null(result.CaloriesKcal);
-        Assert.Equal(1, await db.DailyLogs.CountAsync());
-    }
-
-    [Fact]
-    public async Task DeleteCaloriesAsync_DeletesRow_WhenBothFieldsBecomeNull()
-    {
-        using var db = CreateDb();
-        var svc = CreateService(db);
-        await svc.UpsertAsync(new UpsertDailyLogDto("2024-01-10", null, 2000, null));
-
-        var result = await svc.DeleteCaloriesAsync(new DateOnly(2024, 1, 10));
-
-        Assert.Null(result);
-        Assert.Equal(0, await db.DailyLogs.CountAsync());
-    }
-
-    [Fact]
-    public async Task DeleteCaloriesAsync_KeepsRow_WhenCheatDay_EvenIfBothFieldsNull()
-    {
-        using var db = CreateDb();
-        var svc = CreateService(db);
-        await svc.UpsertAsync(new UpsertDailyLogDto("2024-01-10", null, 2000, null));
-        await svc.SetCheatDayAsync(new DateOnly(2024, 1, 10), true);
-
-        var result = await svc.DeleteCaloriesAsync(new DateOnly(2024, 1, 10));
-
-        Assert.NotNull(result);
-        Assert.True(result.IsCheatDay);
-        Assert.Equal(1, await db.DailyLogs.CountAsync());
-    }
-
-    // ── SetCheatDayAsync ──────────────────────────────────────────────────────
-
-    [Fact]
-    public async Task SetCheatDayAsync_SetsCheatDay_OnExistingLog()
-    {
-        using var db = CreateDb();
-        var svc = CreateService(db);
-        await svc.UpsertAsync(new UpsertDailyLogDto("2024-01-10", 75m, null, null));
-
-        var result = await svc.SetCheatDayAsync(new DateOnly(2024, 1, 10), true);
-
-        Assert.True(result.IsCheatDay);
-    }
-
-    [Fact]
-    public async Task SetCheatDayAsync_CreatesNewRow_WhenLogDoesNotExist()
-    {
-        using var db = CreateDb();
-        var result = await CreateService(db).SetCheatDayAsync(new DateOnly(2024, 1, 10), true);
-
-        Assert.True(result.IsCheatDay);
-        Assert.Equal(1, await db.DailyLogs.CountAsync());
-    }
-
-    [Fact]
-    public async Task SetCheatDayAsync_RemovesCheatDay_DeletesRow_WhenNoOtherData()
-    {
-        using var db = CreateDb();
-        var svc = CreateService(db);
-        await svc.SetCheatDayAsync(new DateOnly(2024, 1, 10), true);
-
-        var result = await svc.SetCheatDayAsync(new DateOnly(2024, 1, 10), false);
-
-        Assert.False(result.IsCheatDay);
-        Assert.Equal(0, await db.DailyLogs.CountAsync());
-    }
-
-    [Fact]
-    public async Task SetCheatDayAsync_RemovesCheatDay_KeepsRow_WhenWeightExists()
-    {
-        using var db = CreateDb();
-        var svc = CreateService(db);
-        await svc.UpsertAsync(new UpsertDailyLogDto("2024-01-10", 75m, null, null));
-        await svc.SetCheatDayAsync(new DateOnly(2024, 1, 10), true);
-
-        var result = await svc.SetCheatDayAsync(new DateOnly(2024, 1, 10), false);
-
-        Assert.False(result.IsCheatDay);
-        Assert.Equal(75m, result.WeightKg);
-        Assert.Equal(1, await db.DailyLogs.CountAsync());
-    }
-
-    [Fact]
-    public async Task SetCheatDayAsync_EffectiveTarget_UsesTdee_WhenCheatDay()
-    {
-        using var db = CreateDb();
-        var date = new DateOnly(2024, 1, 10);
-        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 1800, CreatedAt = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) });
-        db.UserSettings.Add(new UserSettings { Id = 1, TdeeKcal = 2500 });
-        await db.SaveChangesAsync();
-
-        var result = await CreateService(db).SetCheatDayAsync(date, true);
-
-        Assert.Equal(2500, result.CalorieTarget);
+        await CreateService(db).GetAllAsync(null, null, null);
+        Assert.Empty(await db.DailyLogs.ToListAsync());
     }
 }

@@ -50,7 +50,7 @@ public abstract class CalorieGoalsEndpointTestsBase
     {
         await ResetAsync();
 
-        var response = await Client.PostAsJsonAsync("/api/calorie-goals", new { TargetCalories = 1800 });
+        var response = await Client.PostAsJsonAsync("/api/calorie-goals?today=2026-11-24", new { TargetCalories = 1800 });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var goal = await response.Content.ReadFromJsonAsync<CalorieGoalDto>();
@@ -75,7 +75,7 @@ public abstract class CalorieGoalsEndpointTestsBase
     public async Task Delete_Returns204_WhenGoalExists()
     {
         await ResetAsync();
-        var createResponse = await Client.PostAsJsonAsync("/api/calorie-goals", new { TargetCalories = 1800 });
+        var createResponse = await Client.PostAsJsonAsync("/api/calorie-goals?today=2026-11-24", new { TargetCalories = 1800 });
         var goal = await createResponse.Content.ReadFromJsonAsync<CalorieGoalDto>();
 
         var deleteResponse = await Client.DeleteAsync($"/api/calorie-goals/{goal!.Id}");

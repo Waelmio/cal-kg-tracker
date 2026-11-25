@@ -1,33 +1,34 @@
 <template>
   <div class="min-h-screen bg-gray-50">
-    <AppNav @open-settings="showSettings = true" />
+    <AppNav />
     <RouterView />
-    <SettingsModal v-if="showSettings" @close="showSettings = false" />
+    <LogSheet v-if="sheet.isOpen" :key="sheet.date ?? ''" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { onBeforeUnmount, onMounted, watch } from 'vue'
 import AppNav from './components/layout/AppNav.vue'
-import SettingsModal from './components/layout/SettingsModal.vue'
-import { useSettingsStore } from './stores/settings'
-import { useCalorieGoalsStore } from './stores/calorieGoals'
-import { prefillWeek } from './api/dailyLog'
-import { getISOWeek, getISOWeekYear } from './utils/weeks'
+import LogSheet from './components/daylog/LogSheet.vue'
+import { useAppStore } from './stores/app'
+import { useLogSheetStore } from './stores/logSheet'
+import { useLogWeeksStore } from './stores/logWeeks'
 
-const showSettings = ref(false)
+const app = useAppStore()
+const sheet = useLogSheetStore()
+const logWeeks = useLogWeeksStore()
+
+// The tab may stay open overnight: when it becomes visible again, re-read the local date and refetch.
+function onVisible() {
+  if (document.visibilityState === 'visible') app.refresh()
+}
 
 onMounted(async () => {
-  const settingsStore = useSettingsStore()
-  const calorieGoalsStore = useCalorieGoalsStore()
-  await Promise.all([settingsStore.fetch(), calorieGoalsStore.fetchAll()])
-
-  const today = new Date().toLocaleDateString('en-CA')
-  const d = new Date(today + 'T00:00:00Z')
-  const weekKey = `${getISOWeekYear(d)}-W${String(getISOWeek(d)).padStart(2, '0')}`
-  if (localStorage.getItem('prefillWeek') !== weekKey) {
-    await prefillWeek(today)
-    localStorage.setItem('prefillWeek', weekKey)
-  }
+  document.addEventListener('visibilitychange', onVisible)
+  await app.loadSettings().catch(() => {})
 })
+// Keep this week ready, so the log sheet opens with its data already there.
+watch(() => app.version, () => { logWeeks.load(app.today) }, { immediate: true, flush: 'post' })
+onBeforeUnmount(() => document.removeEventListener('visibilitychange', onVisible))
 </script>
+

@@ -30,6 +30,7 @@ public class SeedBuilder(AppDbContext db)
         db.CalorieGoals.Add(new CalorieGoal
         {
             TargetCalories = targetCalories,
+            EffectiveFrom = DateOnly.FromDateTime((createdAt ?? DateTimeOffset.UtcNow).UtcDateTime),
             CreatedAt = createdAt ?? DateTimeOffset.UtcNow,
         });
         return this;

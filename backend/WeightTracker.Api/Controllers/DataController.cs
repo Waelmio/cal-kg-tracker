@@ -12,6 +12,14 @@ public class DataController(IDataService service) : ControllerBase
     public async Task<ActionResult<ExportImportDto>> Export() =>
         Ok(await service.ExportAsync());
 
+    /// <summary>Deletes all data and resets the settings. Cannot be undone: export first.</summary>
+    [HttpDelete]
+    public async Task<IActionResult> Clear()
+    {
+        await service.ClearAsync();
+        return NoContent();
+    }
+
     [HttpPost("import")]
     public async Task<IActionResult> Import([FromBody] ExportImportDto dto)
     {

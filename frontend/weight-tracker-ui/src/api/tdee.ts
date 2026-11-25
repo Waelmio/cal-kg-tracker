@@ -1,5 +1,10 @@
 import client from './client'
-import type { TdeeComputation } from '../types'
+import { localToday } from '../utils/dates'
+import type { TdeeEntry } from '../types'
 
-export const getComputedTdee = (days = 90) =>
-  client.get<TdeeComputation>('/tdee/computed', { params: { days } }).then((r) => r.data)
+export const getEntries = () => client.get<TdeeEntry[]>('/tdee-entries').then((r) => r.data)
+
+export const addEntry = (kcal: number, source: 'Manual' | 'Estimate' = 'Manual') =>
+  client.post<TdeeEntry>('/tdee-entries', { kcal, source }, { params: { today: localToday() } }).then((r) => r.data)
+
+export const removeEntry = (id: number) => client.delete(`/tdee-entries/${id}`).then(() => {})
