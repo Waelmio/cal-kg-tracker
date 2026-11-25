@@ -8,6 +8,8 @@ namespace WeightTracker.UTest;
 
 public class CalorieGoalServiceTests
 {
+    private static readonly DateOnly Today = new(2026, 11, 24);
+
     private static AppDbContext CreateDb()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
@@ -68,7 +70,7 @@ public class CalorieGoalServiceTests
         using var db = CreateDb();
         var service = new CalorieGoalService(db);
 
-        var result = await service.CreateAsync(new CreateCalorieGoalDto(2000), new DateOnly(2026, 11, 24));
+        var result = await service.CreateAsync(new CreateCalorieGoalDto(2000), Today);
 
         Assert.Equal(2000, result.TargetCalories);
         Assert.Equal(1, await db.CalorieGoals.CountAsync());
@@ -78,11 +80,11 @@ public class CalorieGoalServiceTests
     public async Task CreateAsync_ReplacesExistingGoalCreatedToday()
     {
         using var db = CreateDb();
-        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 2000, EffectiveFrom = DateOnly.FromDateTime(DateTime.UtcNow), CreatedAt = DateTime.UtcNow });
+        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 2000, EffectiveFrom = Today });
         await db.SaveChangesAsync();
         var service = new CalorieGoalService(db);
 
-        await service.CreateAsync(new CreateCalorieGoalDto(1800), new DateOnly(2026, 11, 24));
+        await service.CreateAsync(new CreateCalorieGoalDto(1800), Today);
 
         Assert.Equal(1, await db.CalorieGoals.CountAsync());
         Assert.Equal(1800, (await db.CalorieGoals.FirstAsync()).TargetCalories);
@@ -92,11 +94,11 @@ public class CalorieGoalServiceTests
     public async Task CreateAsync_DoesNotReplaceGoalFromPreviousDay()
     {
         using var db = CreateDb();
-        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 2000, EffectiveFrom = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1)), CreatedAt = DateTime.UtcNow.AddDays(-1) });
+        db.CalorieGoals.Add(new CalorieGoal { TargetCalories = 2000, EffectiveFrom = Today.AddDays(-1) });
         await db.SaveChangesAsync();
         var service = new CalorieGoalService(db);
 
-        await service.CreateAsync(new CreateCalorieGoalDto(1800), new DateOnly(2026, 11, 24));
+        await service.CreateAsync(new CreateCalorieGoalDto(1800), Today);
 
         Assert.Equal(2, await db.CalorieGoals.CountAsync());
     }
