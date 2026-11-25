@@ -24,10 +24,10 @@ public class FatSecretTests
     private static readonly FatSecretOptions Options = new() { ConsumerKey = "ck", ConsumerSecret = "cs" };
     private static readonly ProviderCredentials Credentials = new("at", "ats");
 
-    private static (FatSecretProvider Provider, FakeHandler Handler) Create(Func<HttpRequestMessage, string, (HttpStatusCode, string)> answer)
+    private static (FatSecretProvider Provider, FakeHandler Handler) Create(Func<HttpRequestMessage, string, (HttpStatusCode, string)> answer, TimeProvider? clock = null)
     {
         var handler = new FakeHandler(answer);
-        return (new FatSecretProvider(new FatSecretClient(new HttpClient(handler), Options, TimeProvider.System), Options), handler);
+        return (new FatSecretProvider(new FatSecretClient(new HttpClient(handler), Options, TimeProvider.System), Options, clock ?? TimeProvider.System), handler);
     }
 
     private static (FatSecretProvider Provider, FakeHandler Handler) Create(string body, HttpStatusCode status = HttpStatusCode.OK) => Create((_, _) => (status, body));
@@ -96,7 +96,7 @@ public class FatSecretTests
                 : $$$$"""{"month":{"day":[{"date_int":"{{{{first}}}}","calories":"1000"},{"date_int":"{{{{first + 14}}}}","calories":"1500.5"}]}}""");
         });
 
-        var days = await provider.FetchAsync(Credentials, new DateOnly(2026, 9, 10), new DateOnly(2026, 11, 1), default);
+        var days = await provider.FetchAsync(Credentials, new DateOnly(2026, 9, 10), new DateOnly(2026, 11, 1), new DateOnly(2026, 11, 1), default);
 
         Assert.Equal(6, handler.Requests.Count);      // three months, two calls each
         Assert.Equal(
@@ -109,12 +109,45 @@ public class FatSecretTests
     }
 
     [Fact]
+    public async Task Fetch_AsksNoWeightsForMonthsToCome()
+    {
+        var (provider, handler) = Create((_, _) => (HttpStatusCode.OK, """{"month":{}}"""));
+        await provider.FetchAsync(Credentials, new DateOnly(2026, 11, 2), new DateOnly(2026, 12, 13), new DateOnly(2026, 11, 24), default);
+        Assert.Equal(2, handler.Requests.Count(r => r.Request.RequestUri!.AbsolutePath.Contains("food-entries")));
+        Assert.Equal(1, handler.Requests.Count(r => r.Request.RequestUri!.AbsolutePath.Contains("weight")));
+    }
+
+    [Theory]
+    [InlineData("2026-06-01", 12, 0)]
+    [InlineData("2026-05-31", 14, 13)]
+    public async Task Fetch_SpacesOutMoreThanTwelveCalls(string from, int calls, int pauses)
+    {
+        var clock = new InstantClock();
+        var (provider, handler) = Create((_, _) => (HttpStatusCode.OK, """{"month":{}}"""), clock);
+        await provider.FetchAsync(Credentials, DateOnly.Parse(from), new DateOnly(2026, 11, 24), new DateOnly(2026, 11, 24), default);
+        Assert.Equal(calls, handler.Requests.Count);
+        Assert.Equal(Enumerable.Repeat(TimeSpan.FromSeconds(1), pauses), clock.Delays);
+    }
+
+    /// <summary>Delays end at once, and are recorded.</summary>
+    private sealed class InstantClock : TimeProvider
+    {
+        public List<TimeSpan> Delays { get; } = [];
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            Delays.Add(dueTime);
+            return base.CreateTimer(callback, state, TimeSpan.Zero, period);
+        }
+    }
+
+    [Fact]
     public async Task Fetch_LeavesOutValuesTheAppWouldNotAccept()
     {
         var (provider, _) = Create((r, _) => (HttpStatusCode.OK, r.RequestUri!.AbsolutePath.Contains("weight")
             ? $$$$"""{"month":{"day":{"date_int":"{{{{Int("2026-11-01")}}}}","weight_kg":"0.0000"}}}"""
             : $$$$"""{"month":{"day":{"date_int":"{{{{Int("2026-11-01")}}}}","calories":"99999"}}}"""));
-        Assert.Empty(await provider.FetchAsync(Credentials, new DateOnly(2026, 11, 1), new DateOnly(2026, 11, 2), default));
+        Assert.Empty(await provider.FetchAsync(Credentials, new DateOnly(2026, 11, 1), new DateOnly(2026, 11, 2), new DateOnly(2026, 11, 2), default));
     }
 
     [Fact]
@@ -122,14 +155,14 @@ public class FatSecretTests
     {
         var calls = 0;
         var (provider, _) = Create((_, _) => ++calls < 4 ? (HttpStatusCode.OK, """{"month":{}}""") : (HttpStatusCode.OK, """{"error":{"code":1,"message":"x"}}"""));
-        await Assert.ThrowsAsync<IntegrationException>(() => provider.FetchAsync(Credentials, new DateOnly(2026, 9, 1), new DateOnly(2026, 11, 1), default));
+        await Assert.ThrowsAsync<IntegrationException>(() => provider.FetchAsync(Credentials, new DateOnly(2026, 9, 1), new DateOnly(2026, 11, 1), new DateOnly(2026, 11, 1), default));
     }
 
     [Fact]
     public async Task Fetch_WhenFatSecretCannotBeReached_SaysSoWithoutDetails()
     {
         var (provider, _) = Create((_, _) => throw new HttpRequestException("connect https://secret-url"));
-        var e = await Assert.ThrowsAsync<IntegrationException>(() => provider.FetchAsync(Credentials, new DateOnly(2026, 9, 1), new DateOnly(2026, 9, 1), default));
+        var e = await Assert.ThrowsAsync<IntegrationException>(() => provider.FetchAsync(Credentials, new DateOnly(2026, 9, 1), new DateOnly(2026, 9, 1), new DateOnly(2026, 9, 1), default));
         Assert.Equal("FatSecret can't be reached.", e.Message);
     }
 

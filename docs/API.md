@@ -59,7 +59,7 @@ Every statistic is computed server-side. Everything that depends on the date req
 | POST | `/api/integrations/{provider}/connect` | Body `{ usePin }`. Returns `{ authorizeUrl }`, where the browser must go |
 | GET | `/api/integrations/{provider}/callback` | The provider sends the browser here. Redirects to `/settings?integration={provider}&result=connected\|denied\|expired\|failed` |
 | POST | `/api/integrations/{provider}/verify` | Body `{ verifier }`: the code, after `connect` with `usePin` |
-| POST | `/api/integrations/{provider}/sync?today=` | Automatic rules over the last 3 months. Returns written, unchanged and kept per field |
+| POST | `/api/integrations/{provider}/sync?today=` | Automatic rules from 3 weeks before the current week to 2 weeks after it. Returns written, unchanged and kept per field |
 | POST | `/api/integrations/{provider}/sync/preview?today=` | Body `{ from, to }`, up to 12 months. Differences to review. Writes nothing |
 | POST | `/api/integrations/{provider}/sync/apply?today=` | Body `{ previewId, decisions: [{ date, field, choice }] }`. Rows without a decision are kept, rows whose day changed since are skipped. 410 when the preview expired (30 minutes) |
 | DELETE | `/api/integrations/{provider}` | Disconnect. Imported values stay |

@@ -122,9 +122,9 @@ public abstract class IntegrationsEndpointTestsBase : IAsyncLifetime
     {
         await ConnectAsync();
         _fatSecret.Calories[new(2026, 11, 20)] = 1850;
-        _fatSecret.Calories[new(2026, 11, 29)] = 900;        // the rest of this week
-        _fatSecret.Calories[new(2026, 11, 30)] = 900;        // after the window
-        _fatSecret.Calories[new(2026, 8, 28)] = 900;         // before the window
+        _fatSecret.Calories[new(2026, 12, 13)] = 900;        // two weeks ahead
+        _fatSecret.Calories[new(2026, 12, 14)] = 900;        // after the window
+        _fatSecret.Calories[new(2026, 11, 1)] = 900;         // before the window
         _fatSecret.Weights[new(2026, 11, 20)] = 82.345m;
 
         var response = await _client.PostAsync($"/api/integrations/fatsecret/sync?{Today}", null);
@@ -133,7 +133,7 @@ public abstract class IntegrationsEndpointTestsBase : IAsyncLifetime
         Assert.Equal((2, 1), (result.Calories.Written, result.Weight.Written));
 
         var all = await Db(db => db.DailyLogs.OrderBy(l => l.Date).ToListAsync());
-        Assert.Equal([new DateOnly(2026, 11, 20), new DateOnly(2026, 11, 29)], all.Select(l => l.Date));
+        Assert.Equal([new DateOnly(2026, 11, 20), new DateOnly(2026, 12, 13)], all.Select(l => l.Date));
         var log = all[0];
         Assert.Equal((1850, 82.35m, LogSource.FatSecret), (log.CaloriesKcal, log.WeightKg, log.CaloriesSource));
 
@@ -255,6 +255,34 @@ public abstract class IntegrationsEndpointTestsBase : IAsyncLifetime
         await service.RunAsync(default);
         Assert.Equal("NeedsReconnect", (await Status()).GetProperty("status").GetString());
         await service.RunAsync(default);                                     // skipped from now on
+    }
+
+    [Fact]
+    public async Task AfterARestart_TheNextSyncIsCountedFromTheLastOne()
+    {
+        // On, unlike in the other tests, but the test ends before its first sync.
+        await using var factory = Configured(b => b.UseSetting("Integrations:SyncIntervalHours", "12"));
+        var service = factory.Services.GetServices<Microsoft.Extensions.Hosting.IHostedService>().OfType<IntegrationSyncBackgroundService>().Single();
+        var soon = TimeSpan.FromSeconds(30);
+        Assert.Equal(soon, await service.FirstDelayAsync(default));          // nothing connected
+
+        await ConnectAsync();
+        Assert.Equal(soon, await service.FirstDelayAsync(default));          // never synced
+
+        async Task<TimeSpan> After(double hours, SyncStatus status)
+        {
+            await Db(async db =>
+            {
+                var c = await db.IntegrationConnections.SingleAsync();
+                (c.LastSyncAt, c.LastSyncStatus) = (DateTimeOffset.UtcNow.AddHours(-hours), status);
+                return await db.SaveChangesAsync();
+            });
+            return await service.FirstDelayAsync(default);
+        }
+        Assert.InRange(await After(2, SyncStatus.Succeeded), TimeSpan.FromHours(9.9), TimeSpan.FromHours(10));
+        Assert.Equal(soon, await After(13, SyncStatus.Succeeded));
+        Assert.Equal(soon, await After(2, SyncStatus.Failed));
+        Assert.Equal(TimeSpan.FromHours(12), await After(-50, SyncStatus.Succeeded));
     }
 }
 

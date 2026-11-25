@@ -41,7 +41,7 @@ public class SyncTests : IDisposable
                 ? Task.FromResult(new ProviderCredentials("secret-token", "secret-secret"))
                 : throw new IntegrationException("Invalid verifier");
 
-        public async Task<IReadOnlyList<ImportedDay>> FetchAsync(ProviderCredentials credentials, DateOnly from, DateOnly to, CancellationToken ct)
+        public async Task<IReadOnlyList<ImportedDay>> FetchAsync(ProviderCredentials credentials, DateOnly from, DateOnly to, DateOnly today, CancellationToken ct)
         {
             UsedCredentials = credentials;
             Fetched.Add((from, to));
@@ -88,11 +88,11 @@ public class SyncTests : IDisposable
     // ── Window ────────────────────────────────────────────────────────────────
 
     [Theory]
-    [InlineData("2026-11-23", "2026-08-29", "2026-11-29")]   // Monday
-    [InlineData("2026-11-29", "2026-08-29", "2026-11-29")]   // Sunday
-    [InlineData("2026-05-25", "2026-02-28", "2026-05-31")]
-    public void Window_EndsWithTheCurrentWeek_ThreeMonthsBack(string today, string from, string to) =>
-        Assert.Equal((DateOnly.Parse(from), DateOnly.Parse(to)), SyncRules.Window(DateOnly.Parse(today), 3));
+    [InlineData("2026-11-23", "2026-11-02", "2026-12-13")]   // Monday
+    [InlineData("2026-11-29", "2026-11-02", "2026-12-13")]   // Sunday
+    [InlineData("2026-12-30", "2026-12-07", "2027-01-17")]   // over the year's end
+    public void Window_IsFullWeeksAroundTheCurrentOne(string today, string from, string to) =>
+        Assert.Equal((DateOnly.Parse(from), DateOnly.Parse(to)), SyncRules.Window(DateOnly.Parse(today), 3, 2));
 
     // ── Automatic rules ───────────────────────────────────────────────────────
 
@@ -108,7 +108,7 @@ public class SyncTests : IDisposable
         Assert.Equal((1850, 82.35m, LogSource.FatSecret, LogSource.FatSecret, Today),
             (log.CaloriesKcal, log.WeightKg, log.CaloriesSource, log.WeightSource, log.CaloriesSetOn));
         Assert.Equal((new FieldSyncResult(1, 0, 0), new FieldSyncResult(1, 0, 0)), (result.Calories, result.Weight));
-        Assert.Equal((D("08-29"), D("11-29")), Assert.Single(_provider.Fetched));
+        Assert.Equal((D("11-02"), D("12-13")), Assert.Single(_provider.Fetched));
         Assert.Equal(new ProviderCredentials("secret-token", "secret-secret"), _provider.UsedCredentials);
     }
 
@@ -230,15 +230,15 @@ public class SyncTests : IDisposable
     }
 
     [Fact]
-    public async Task Sync_ImportsTheRestOfTheWeek_AsLoggedAhead()
+    public async Task Sync_ImportsTheDaysToCome_AsLoggedAhead()
     {
         await ConnectAsync();
         await User("11-26", 2500, notes: "party", cheat: true);     // logged ahead
         await User("11-27", 2200);                                  // logged ahead, not at the provider
         Remote("11-25", 1700, 82m);                                 // only planned in the app
         Remote("11-26", 1900);
-        Remote("11-29", 2000);
-        Remote("11-30", 2100);                                      // next week
+        Remote("12-13", 2000);
+        Remote("12-14", 2100);                                      // after the window
 
         var result = await Sync();
 
@@ -247,8 +247,8 @@ public class SyncTests : IDisposable
         var ahead = (await Log("11-26"))!;
         Assert.Equal((1900, "party", true, LogSource.FatSecret, true), (ahead.CaloriesKcal, ahead.Notes, ahead.IsCheatDay, ahead.CaloriesSource, SyncRules.SetInAdvance(ahead)));
         Assert.Equal(2200, (await Log("11-27"))!.CaloriesKcal);
-        Assert.Equal(2000, (await Log("11-29"))!.CaloriesKcal);
-        Assert.Null(await Log("11-30"));
+        Assert.Equal(2000, (await Log("12-13"))!.CaloriesKcal);
+        Assert.Null(await Log("12-14"));
         Assert.Equal((new FieldSyncResult(3, 0, 0), new FieldSyncResult(0, 0, 0)), (result.Calories, result.Weight));
     }
 

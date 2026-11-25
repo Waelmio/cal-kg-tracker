@@ -7,11 +7,11 @@ namespace WeightTracker.Api.Integrations;
 /// <summary>Which values an import may write, as pure functions. A day the provider has nothing for is never touched.</summary>
 public static class SyncRules
 {
-    /// <summary>From the given number of months back to the end of the current week (Sunday).</summary>
-    public static (DateOnly From, DateOnly To) Window(DateOnly today, int months)
+    /// <summary>Full weeks (Monday to Sunday): the current one and the given number before and after it.</summary>
+    public static (DateOnly From, DateOnly To) Window(DateOnly today, int weeksBack, int weeksAhead)
     {
-        var end = StatsCalculator.SundayOf(today);
-        return (end.AddMonths(-months), end);
+        var sunday = StatsCalculator.SundayOf(today);
+        return (sunday.AddDays(-6 - 7 * weeksBack), sunday.AddDays(7 * weeksAhead));
     }
 
     /// <summary>Logged before its own day: a plan, which the real value replaces.</summary>

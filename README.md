@@ -108,14 +108,14 @@ Imports calories and weight from your FatSecret diary into the daily logs.
 
 How it imports:
 
-- The last 3 months up to the end of this week, every 12 hours and with **Sync now**.
+- The current week, the 3 before and the 2 after, every 12 hours and with **Sync now**. A restart only syncs when the last sync is older than that or failed. Use **Sync a period** for older days.
 - Calories are written when the day has none, or when they were set in advance (before their own day). Weight is written when the day has none. Values imported earlier follow the diary.
-- The rest of the week is imported too: calories already in the diary for a day to come replace what you logged ahead in the app, and show as logged ahead. Weights are imported up to today.
-- Anything else you logged is never replaced. **Sync a period** compares up to 12 months and lets you decide value by value.
+- Days to come are imported too: calories already in the diary for a day to come replace what you logged ahead in the app, and show as logged ahead. Weights are imported up to today.
+- Anything else you logged is never replaced. **Sync a period** compares up to 12 months and lets you decide value by value. FatSecret limits how many calls it takes in a short time, so a period of more than 6 months is read slowly (up to half a minute).
 - A day missing in FatSecret never deletes anything. Disconnecting keeps what was imported; "Clear data" also disconnects.
 - Before connecting for the first time, export your data (Settings > Data): the first sync replaces calories whose last change is older than their day, which includes days the app filled in before the redesign.
 - A value you clear in the app comes back with the next sync if FatSecret still has it.
-- Settings in `appsettings.json` (or as environment variables, `Integrations__SyncIntervalHours`): `SyncIntervalHours` (0 turns the automatic sync off), `SyncMonths`, `ImportTodayCalories`. Today counts in the statistics as soon as it has calories, so a sync in the middle of the day counts a partial total until the next one. Set `ImportTodayCalories` to `false` to import a day's calories only once it is over (so none for the rest of the week either).
+- Settings in `appsettings.json` (or as environment variables, `Integrations__SyncIntervalHours`): `SyncIntervalHours` (0 turns the automatic sync off), `SyncWeeksBack` and `SyncWeeksAhead` (full weeks around the current one), `ImportTodayCalories`. Today counts in the statistics as soon as it has calories, so a sync in the middle of the day counts a partial total until the next one. Set `ImportTodayCalories` to `false` to import a day's calories only once it is over (so none for the days to come either).
 
 Good to know:
 

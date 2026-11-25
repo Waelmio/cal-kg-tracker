@@ -40,7 +40,7 @@ public class IntegrationSyncService(
     private static readonly TimeSpan PreviewLifetime = TimeSpan.FromMinutes(30);
     private sealed record CachedPreview(string ProviderId, List<SyncRow> Rows);
 
-    /// <summary>The automatic rules over the last months and the rest of this week. Nothing is written when anything fails.</summary>
+    /// <summary>The automatic rules over the weeks around today. Nothing is written when anything fails.</summary>
     public async Task<SyncResultDto> SyncAsync(string id, DateOnly today, CancellationToken ct)
     {
         var provider = integrations.Provider(id);
@@ -48,8 +48,8 @@ public class IntegrationSyncService(
         var connection = await ConnectionAsync(provider, ct);
         try
         {
-            var (from, to) = SyncRules.Window(today, options.Value.SyncMonths);
-            var days = await FetchAsync(provider, connection, from, to, ct);
+            var (from, to) = SyncRules.Window(today, options.Value.SyncWeeksBack, options.Value.SyncWeeksAhead);
+            var days = await FetchAsync(provider, connection, from, to, today, ct);
 
             // Disconnected, or another account connected, in the meantime: the user doesn't want these anymore.
             if ((await ConnectionAsync(provider, ct)).AccessToken != connection.AccessToken)
@@ -86,7 +86,7 @@ public class IntegrationSyncService(
         if (from > to) throw new IntegrationException("The start date must be before the end date, and not in the future.", StatusCodes.Status400BadRequest);
         if (to > from.AddMonths(12)) throw new IntegrationException("The period can be up to 12 months.", StatusCodes.Status400BadRequest);
 
-        var days = await FetchAsync(provider, await ConnectionAsync(provider, ct), from, to, ct);
+        var days = await FetchAsync(provider, await ConnectionAsync(provider, ct), from, to, today, ct);
         var (rows, equal, missing) = SyncRules.Compare(days, await LogsAsync(from, to, ct), provider.Source);
 
         var previewId = Guid.NewGuid();
@@ -147,11 +147,11 @@ public class IntegrationSyncService(
         return connection;
     }
 
-    private async Task<IReadOnlyList<ImportedDay>> FetchAsync(IIntegrationProvider provider, IntegrationConnection connection, DateOnly from, DateOnly to, CancellationToken ct)
+    private async Task<IReadOnlyList<ImportedDay>> FetchAsync(IIntegrationProvider provider, IntegrationConnection connection, DateOnly from, DateOnly to, DateOnly today, CancellationToken ct)
     {
         try
         {
-            return await provider.FetchAsync(integrations.Decrypt(connection), from, to, ct);
+            return await provider.FetchAsync(integrations.Decrypt(connection), from, to, today, ct);
         }
         catch (NeedsReconnectException e)
         {

@@ -36,5 +36,6 @@ public interface IIntegrationProvider
     Task<ProviderCredentials> CompleteAuthorizationAsync(string requestToken, string requestTokenSecret, string verifier, CancellationToken ct);
 
     /// <summary>Days with something in the period, both ends included. Days the provider has nothing for are left out.</summary>
-    Task<IReadOnlyList<ImportedDay>> FetchAsync(ProviderCredentials credentials, DateOnly from, DateOnly to, CancellationToken ct);
+    /// <param name="today">Weights after it are never used, so there is no need to ask for them.</param>
+    Task<IReadOnlyList<ImportedDay>> FetchAsync(ProviderCredentials credentials, DateOnly from, DateOnly to, DateOnly today, CancellationToken ct);
 }

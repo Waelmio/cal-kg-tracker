@@ -12,7 +12,7 @@
       </div>
       <p v-if="problem" role="alert" class="error">{{ problem }}</p>
       <p v-if="error" role="alert" class="error">{{ error }}</p>
-      <p v-if="busy" role="status" class="muted">Reading {{ name }}…</p>
+      <p v-if="busy" role="status" class="muted">Reading {{ name }}… A long period can take half a minute.</p>
     </form>
 
     <!-- 2. The review -->
@@ -46,7 +46,7 @@
             </div>
           </div>
         </section>
-        <p v-if="leavesEmpty" class="muted">The automatic sync fills empty days of the last 3 months, the ones you leave empty too.</p>
+        <p v-if="leavesEmpty" class="muted">The automatic sync fills empty days of the last 3 weeks, the ones you leave empty too.</p>
       </template>
       <p v-if="error" role="alert" class="error">{{ error }}</p>
     </div>

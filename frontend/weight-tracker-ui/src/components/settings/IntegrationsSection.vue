@@ -25,7 +25,7 @@
         <p v-if="p.lastSyncAt" class="muted">Last sync {{ when(p.lastSyncAt) }}{{ p.lastSyncStatus === 'Failed' ? ', failed' : '' }}.</p>
         <p v-else-if="p.status" class="muted">Not synced yet.</p>
         <p v-if="p.lastError && p.lastError !== actionError" class="error">{{ p.lastError }}</p>
-        <p v-if="p.status !== 'Connected'" class="muted">Values are imported every few hours, over the last 3 months and the rest of this week. What you logged yourself is never replaced, except calories set in advance.</p>
+        <p v-if="p.status !== 'Connected'" class="muted">Values are imported every few hours, from 3 weeks back to 2 weeks ahead. What you logged yourself is never replaced, except calories set in advance.</p>
 
         <div class="buttons">
           <template v-if="p.status === 'Connected'">
