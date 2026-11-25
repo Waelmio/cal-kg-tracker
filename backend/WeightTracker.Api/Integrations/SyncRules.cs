@@ -26,7 +26,10 @@ public static class SyncRules
 
     private static decimal? Imported(ImportedDay day, LogField field) => field == LogField.Calories ? day.CaloriesKcal : day.WeightKg;
 
-    /// <summary>What an automatic sync writes.</summary>
+    /// <summary>
+    /// What an automatic sync writes. Calories after today are the provider's plan: they replace whatever the app has and
+    /// count as set in advance, so later syncs keep following the provider. There is no weight after today.
+    /// </summary>
     public static (List<LogWrite> Writes, FieldSyncResult Calories, FieldSyncResult Weight) Plan(
         IEnumerable<ImportedDay> days, IReadOnlyDictionary<DateOnly, DailyLog> logs, LogSource source, DateOnly today, bool importTodayCalories)
     {
@@ -36,8 +39,9 @@ public static class SyncRules
             int written = 0, unchanged = 0, kept = 0;
             foreach (var day in days)
             {
-                if (day.Date > today || Imported(day, field) is not { } value) continue;
-                if (field == LogField.Calories && day.Date == today && !importTodayCalories) continue;
+                if (Imported(day, field) is not { } value) continue;
+                if (field == LogField.Weight && day.Date > today) continue;
+                if (field == LogField.Calories && day.Date >= today && !importTodayCalories) continue;     // not over yet
                 var log = logs.GetValueOrDefault(day.Date);
                 if (AppValue(log, field) == value) unchanged++;
                 else if (!IsOpen(log, field, source)) kept++;

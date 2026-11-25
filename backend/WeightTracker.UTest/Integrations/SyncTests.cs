@@ -108,7 +108,7 @@ public class SyncTests : IDisposable
         Assert.Equal((1850, 82.35m, LogSource.FatSecret, LogSource.FatSecret, Today),
             (log.CaloriesKcal, log.WeightKg, log.CaloriesSource, log.WeightSource, log.CaloriesSetOn));
         Assert.Equal((new FieldSyncResult(1, 0, 0), new FieldSyncResult(1, 0, 0)), (result.Calories, result.Weight));
-        Assert.Equal((D("08-29"), Today), Assert.Single(_provider.Fetched));
+        Assert.Equal((D("08-29"), D("11-29")), Assert.Single(_provider.Fetched));
         Assert.Equal(new ProviderCredentials("secret-token", "secret-secret"), _provider.UsedCredentials);
     }
 
@@ -229,6 +229,46 @@ public class SyncTests : IDisposable
         Assert.Null(await Log("11-21"));
     }
 
+    [Fact]
+    public async Task Sync_ImportsTheRestOfTheWeek_AsLoggedAhead()
+    {
+        await ConnectAsync();
+        await User("11-26", 2500, notes: "party", cheat: true);     // logged ahead
+        await User("11-27", 2200);                                  // logged ahead, not at the provider
+        Remote("11-25", 1700, 82m);                                 // only planned in the app
+        Remote("11-26", 1900);
+        Remote("11-29", 2000);
+        Remote("11-30", 2100);                                      // next week
+
+        var result = await Sync();
+
+        var planned = (await Log("11-25"))!;
+        Assert.Equal((1700, null, LogSource.FatSecret, true), (planned.CaloriesKcal, planned.WeightKg, planned.CaloriesSource, SyncRules.SetInAdvance(planned)));
+        var ahead = (await Log("11-26"))!;
+        Assert.Equal((1900, "party", true, LogSource.FatSecret, true), (ahead.CaloriesKcal, ahead.Notes, ahead.IsCheatDay, ahead.CaloriesSource, SyncRules.SetInAdvance(ahead)));
+        Assert.Equal(2200, (await Log("11-27"))!.CaloriesKcal);
+        Assert.Equal(2000, (await Log("11-29"))!.CaloriesKcal);
+        Assert.Null(await Log("11-30"));
+        Assert.Equal((new FieldSyncResult(3, 0, 0), new FieldSyncResult(0, 0, 0)), (result.Calories, result.Weight));
+    }
+
+    [Fact]
+    public async Task Sync_ALoggedAheadDay_FollowsTheProvider_UntilTheUserLogsItOnItsDay()
+    {
+        await ConnectAsync();
+        Remote("11-26", 600);
+        await Sync();
+        await User("11-26", 2500);                                  // still ahead: the provider wins
+        Remote("11-26", 1400);
+        await Sync(D("11-25"));
+        Assert.Equal(1400, (await Log("11-26"))!.CaloriesKcal);
+
+        await User("11-26", 2300, on: D("11-26"));
+        Remote("11-26", 1800);
+        await Sync(D("11-26"));
+        Assert.Equal(2300, (await Log("11-26"))!.CaloriesKcal);
+    }
+
     [Theory]
     [InlineData(true, 700)]
     [InlineData(false, null)]
@@ -238,7 +278,9 @@ public class SyncTests : IDisposable
         await ConnectAsync();
         Remote("11-24", 700, 82m);
         Remote("11-23", 1800);
+        Remote("11-25", 700);
         await Sync();
+        Assert.Equal(expected, (await Log("11-25"))?.CaloriesKcal);
         var log = (await Log("11-24"))!;
         Assert.Equal((expected, 82m), (log.CaloriesKcal, log.WeightKg));
         Assert.Equal(1800, (await Log("11-23"))!.CaloriesKcal);

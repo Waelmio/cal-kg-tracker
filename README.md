@@ -110,11 +110,12 @@ How it imports:
 
 - The last 3 months up to the end of this week, every 12 hours and with **Sync now**.
 - Calories are written when the day has none, or when they were set in advance (before their own day). Weight is written when the day has none. Values imported earlier follow the diary.
+- The rest of the week is imported too: calories already in the diary for a day to come replace what you logged ahead in the app, and show as logged ahead. Weights are imported up to today.
 - Anything else you logged is never replaced. **Sync a period** compares up to 12 months and lets you decide value by value.
 - A day missing in FatSecret never deletes anything. Disconnecting keeps what was imported; "Clear data" also disconnects.
 - Before connecting for the first time, export your data (Settings > Data): the first sync replaces calories whose last change is older than their day, which includes days the app filled in before the redesign.
 - A value you clear in the app comes back with the next sync if FatSecret still has it.
-- Settings in `appsettings.json` (or as environment variables, `Integrations__SyncIntervalHours`): `SyncIntervalHours` (0 turns the automatic sync off), `SyncMonths`, `ImportTodayCalories`. Today counts in the statistics as soon as it has calories, so a sync in the middle of the day counts a partial total until the next one. Set `ImportTodayCalories` to `false` to import a day's calories only once it is over.
+- Settings in `appsettings.json` (or as environment variables, `Integrations__SyncIntervalHours`): `SyncIntervalHours` (0 turns the automatic sync off), `SyncMonths`, `ImportTodayCalories`. Today counts in the statistics as soon as it has calories, so a sync in the middle of the day counts a partial total until the next one. Set `ImportTodayCalories` to `false` to import a day's calories only once it is over (so none for the rest of the week either).
 
 Good to know:
 
@@ -127,7 +128,7 @@ Good to know:
 ```bash
 export FATSECRET_CONSUMER_KEY=... FATSECRET_CONSUMER_SECRET=...
 python3 scripts/fatsecret_spike.py --year
-python3 scripts/fatsecret_spike.py --from 2025-01-01 --to 2025-12-31   # any period
+python3 scripts/fatsecret_spike.py --from 2025-01-01 --to 2025-12-31   # any period, days to come included
 ```
 
 ## Project Infos

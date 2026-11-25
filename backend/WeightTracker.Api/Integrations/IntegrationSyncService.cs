@@ -40,7 +40,7 @@ public class IntegrationSyncService(
     private static readonly TimeSpan PreviewLifetime = TimeSpan.FromMinutes(30);
     private sealed record CachedPreview(string ProviderId, List<SyncRow> Rows);
 
-    /// <summary>The automatic rules over the last months. Nothing is written when anything fails.</summary>
+    /// <summary>The automatic rules over the last months and the rest of this week. Nothing is written when anything fails.</summary>
     public async Task<SyncResultDto> SyncAsync(string id, DateOnly today, CancellationToken ct)
     {
         var provider = integrations.Provider(id);
@@ -49,13 +49,13 @@ public class IntegrationSyncService(
         try
         {
             var (from, to) = SyncRules.Window(today, options.Value.SyncMonths);
-            var days = await FetchAsync(provider, connection, from, today, ct);     // nothing to import after today
+            var days = await FetchAsync(provider, connection, from, to, ct);
 
             // Disconnected, or another account connected, in the meantime: the user doesn't want these anymore.
             if ((await ConnectionAsync(provider, ct)).AccessToken != connection.AccessToken)
                 throw new IntegrationException("The connection changed during the sync. Sync again.", StatusCodes.Status409Conflict);
 
-            var stored = await LogsAsync(from, today, ct);
+            var stored = await LogsAsync(from, to, ct);
             var (writes, calories, weight) = SyncRules.Plan(days, stored, provider.Source, today, options.Value.ImportTodayCalories);
             await logs.WriteFieldsAsync(writes, today);
             await UpdateAsync(connection, c =>

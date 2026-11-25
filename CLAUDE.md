@@ -63,7 +63,7 @@ Controllers are thin. All statistics live in `Stats/`:
 - `IIntegrationProvider`: one source of calories and weight, found by `Id`. A new provider is an implementation, a `LogSource` value and a registration in `IntegrationsSetup`.
 - `FatSecret/`: `OAuth1Signer`, `FatSecretClient` (HTTP and parsing), `FatSecretProvider`. Verified reference: `scripts/fatsecret_spike.py`.
 - `SyncRules`: what an import may write, as pure functions. `IntegrationSyncService`: sync, preview, apply. `IntegrationService`: connecting, tokens. `IntegrationSyncBackgroundService`: every 12 h; the server's time zone decides its date, every other sync gets `today` from the client.
-- Rules: calories only when empty, set in advance or imported; weight only when empty or imported. Nothing is ever deleted by a sync.
+- Rules: calories only when empty, set in advance or imported, up to the end of the current week (days to come stay "logged ahead"); weight only when empty or imported, up to today. Nothing is ever deleted by a sync.
 - Never log the provider's URLs: they carry tokens (`RemoveAllLoggers`).
 
 ### Frontend

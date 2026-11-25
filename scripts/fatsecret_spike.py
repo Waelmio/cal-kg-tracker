@@ -13,7 +13,7 @@ Usage:
 
 Every day of a period, printed and saved as CSV (git-ignored data/ folder by default):
     python3 scripts/fatsecret_spike.py --year                             # the last 12 months, today included
-    python3 scripts/fatsecret_spike.py --from 2025-01-01 --to 2025-12-31  # any period
+    python3 scripts/fatsecret_spike.py --from 2025-01-01 --to 2025-12-31  # any period, days to come included
     python3 scripts/fatsecret_spike.py --year --csv ~/fatsecret.csv       # choose the file
 
 Only the Python standard library is used. The access token/secret are saved to
@@ -266,7 +266,7 @@ def main():
                     help="use a local http://localhost:PORT/callback redirect instead of the PIN (default port 8765)")
     ap.add_argument("--year", action="store_true", help="every day of the last 12 months, printed and saved as CSV")
     ap.add_argument("--from", dest="start", type=dt.date.fromisoformat, metavar="YYYY-MM-DD", help="start of a period")
-    ap.add_argument("--to", dest="end", type=dt.date.fromisoformat, metavar="YYYY-MM-DD", help="end of a period (default today)")
+    ap.add_argument("--to", dest="end", type=dt.date.fromisoformat, metavar="YYYY-MM-DD", help="end of a period, may be in the future (default today)")
     ap.add_argument("--csv", metavar="FILE", help="where to save the period (default data/fatsecret-FROM_TO.csv)")
     args = ap.parse_args()
 
@@ -276,11 +276,11 @@ def main():
     if args.end and not args.start:
         ap.error("--to needs --from")
     start = one_year_before(today) if args.year else args.start
-    end = min(args.end or today, today)
+    end = args.end or today
     if args.csv and not start:
         ap.error("--csv needs --year or --from")
     if start and start > end:
-        ap.error("--from is after --to (or in the future)")
+        ap.error("--from is after --to (default today)")
 
     key = os.environ.get("FATSECRET_CONSUMER_KEY", "").strip().strip("'\"")
     secret = os.environ.get("FATSECRET_CONSUMER_SECRET", "").strip().strip("'\"")

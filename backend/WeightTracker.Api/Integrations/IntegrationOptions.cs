@@ -11,7 +11,7 @@ public class IntegrationOptions
 
     /// <summary>
     /// Today counts in every statistic as soon as it has calories, so a sync in the middle of the day counts a partial
-    /// total until the next one. False: a sync leaves the calories of a day alone until it is over.
+    /// total until the next one. False: a sync leaves the calories of a day alone until it is over, the rest of the week included.
     /// </summary>
     public bool ImportTodayCalories { get; set; } = true;
 }

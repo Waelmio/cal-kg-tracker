@@ -122,16 +122,19 @@ public abstract class IntegrationsEndpointTestsBase : IAsyncLifetime
     {
         await ConnectAsync();
         _fatSecret.Calories[new(2026, 11, 20)] = 1850;
-        _fatSecret.Calories[new(2026, 11, 25)] = 900;        // after today
+        _fatSecret.Calories[new(2026, 11, 29)] = 900;        // the rest of this week
+        _fatSecret.Calories[new(2026, 11, 30)] = 900;        // after the window
         _fatSecret.Calories[new(2026, 8, 28)] = 900;         // before the window
         _fatSecret.Weights[new(2026, 11, 20)] = 82.345m;
 
         var response = await _client.PostAsync($"/api/integrations/fatsecret/sync?{Today}", null);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var result = (await response.Content.ReadFromJsonAsync<SyncResultDto>())!;
-        Assert.Equal((1, 1), (result.Calories.Written, result.Weight.Written));
+        Assert.Equal((2, 1), (result.Calories.Written, result.Weight.Written));
 
-        var log = await Db(db => db.DailyLogs.SingleAsync());
+        var all = await Db(db => db.DailyLogs.OrderBy(l => l.Date).ToListAsync());
+        Assert.Equal([new DateOnly(2026, 11, 20), new DateOnly(2026, 11, 29)], all.Select(l => l.Date));
+        var log = all[0];
         Assert.Equal((1850, 82.35m, LogSource.FatSecret), (log.CaloriesKcal, log.WeightKg, log.CaloriesSource));
 
         var status = await Status();
