@@ -47,16 +47,16 @@ make test-frontend # Frontend only (Vitest)
 
 ## Features
 
-- Log daily weight and calories independently (one row per day, both fields nullable)
-- Set weight goals — active goal is always the most recent entry
-- Set daily calorie targets — same history pattern as weight goals
-- Dashboard with a daily budget that keeps your calorie target on average over 1 to 5 weeks, calendar with week and month summaries, weight pace, TDEE estimate and goal projection
+- Log daily weight and calories independently
+- Set weight goals
+- Set daily calorie targets
+- Dashboard with a daily budget that keeps your calorie target, aiming at an average over 1 to 5 weeks, 
+- Calendar with week and month summaries, weight pace, TDEE estimate and goal projection
 - TDEE estimation via linear regression on logged weight and calorie data
-- Weight history chart (Chart.js)
-- kg / lbs unit toggle — weight stored internally as kg, converted at display time
-- User settings: height, preferred unit, cached TDEE
-- Import calories and weight from FatSecret: every 12 hours, on demand, or over a period with a day-by-day review
-- SQLite (default) or PostgreSQL — provider chosen via env vars, auto-migrated on startup
+- Weight history chart
+- User settings: height, preferred unit, TDEE
+- Integrations:
+  - Import calories and weight from FatSecret: every 12 hours, on demand, or over a period with a day-by-day review
 
 
 ## Environment Variables
@@ -84,9 +84,8 @@ The backend selects a database provider at startup using the following priority 
 |---|---|---|
 | `FATSECRET_CONSUMER_KEY` | — | OAuth 1.0 Consumer Key of your FatSecret developer account |
 | `FATSECRET_CONSUMER_SECRET` | — | OAuth 1.0 Consumer Secret |
-| `PUBLIC_BASE_URL` | the address the browser uses | Where FatSecret sends the browser back to, e.g. `https://weight.example.org`. Only needed when that can't be detected |
-| `DATA_PROTECTION_KEYS_PATH` | `keys` next to the SQLite database; `keys` in the app folder with Postgres | Keys that encrypt the stored FatSecret token. Must be on a volume |
-| `TZ` | `UTC` | Time zone that decides which day it is for the automatic sync, e.g. `Europe/Paris` |
+| `PUBLIC_BASE_URL` | the address the browser uses. | Where FatSecret sends the browser back in the callback for login-in, generally your website. Default is fine. |
+| `DATA_PROTECTION_KEYS_PATH` | `keys` next to the SQLite database; `keys` in the app folder with Postgres | Keys that encrypt the stored FatSecret token. Must be on a volume. Default is fine. |
 
 See [FatSecret](#fatsecret-1) for the setup.
 
@@ -106,24 +105,13 @@ Imports calories and weight from your FatSecret diary into the daily logs.
 3. Set `FATSECRET_CONSUMER_KEY` and `FATSECRET_CONSUMER_SECRET`. With Docker, put them in a `.env` file next to the compose file (git-ignored). Then restart the app.
 4. Open Settings > Integrations > **Connect** and approve. If FatSecret can't send you back to the app, use the code instead.
 
-How it imports:
-
-- The current week, the 3 before and the 2 after, every 12 hours and with **Sync now**. A restart only syncs when the last sync is older than that or failed. Use **Sync a period** for older days.
-- Calories are written when the day has none, or when they were set in advance (before their own day). Weight is written when the day has none. Values imported earlier follow the diary.
-- Days to come are imported too: calories already in the diary for a day to come replace what you logged ahead in the app, and show as logged ahead. Weights are imported up to today.
-- Anything else you logged is never replaced. **Sync a period** compares up to 12 months and lets you decide value by value. FatSecret limits how many calls it takes in a short time, so a period of more than 6 months is read slowly (up to half a minute).
-- A day missing in FatSecret never deletes anything. Disconnecting keeps what was imported; "Clear data" also disconnects.
-- Before connecting for the first time, export your data (Settings > Data): the first sync replaces calories whose last change is older than their day, which includes days the app filled in before the redesign.
-- A value you clear in the app comes back with the next sync if FatSecret still has it.
-- Settings in `appsettings.json` (or as environment variables, `Integrations__SyncIntervalHours`): `SyncIntervalHours` (0 turns the automatic sync off), `SyncWeeksBack` and `SyncWeeksAhead` (full weeks around the current one), `ImportTodayCalories`. Today counts in the statistics as soon as it has calories, so a sync in the middle of the day counts a partial total until the next one. Set `ImportTodayCalories` to `false` to import a day's calories only once it is over (so none for the days to come either).
+It imports the current week, the 3 before and the 2 after, every 12 hours and with **Sync now**. `Logged` day are not overwritten `Planned` and `Logged Ahead` days are.
 
 Good to know:
 
-- If a sync says the IP address is refused, add the server's **public** IP under "Manage API Keys" on platform.fatsecret.com.
 - FatSecret's terms limit how long most of its data may be stored (24 hours), without an exception for personal use. This app keeps what it imports; using it this way is your decision.
-- The token is stored encrypted. If the keys folder is lost (`DATA_PROTECTION_KEYS_PATH`), connect again.
 
-`scripts/fatsecret_spike.py` talks to FatSecret without the app. To print every day of the last 12 months and save it as CSV in `data/`:
+`scripts/fatsecret_spike.py` can be used for testing or exporting your data from FatSecret:
 
 ```bash
 export FATSECRET_CONSUMER_KEY=... FATSECRET_CONSUMER_SECRET=...
