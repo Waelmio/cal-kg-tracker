@@ -378,4 +378,21 @@ public class DataServiceTests
         Assert.Single(reimported.CalorieGoals);
         Assert.Equal(exported.CalorieGoals[0].TargetCalories, reimported.CalorieGoals[0].TargetCalories);
     }
+
+    [Fact]
+    public async Task Sources_SurviveAnExport_AndOlderExportsAreTheUsers()
+    {
+        using var db = CreateDb();
+        var service = new DataService(db);
+        var ts = new DateTime(2024, 1, 10, 0, 0, 0, DateTimeKind.Utc);
+        db.DailyLogs.Add(new DailyLog { Date = new DateOnly(2024, 1, 9), CaloriesKcal = 1800, CaloriesSource = LogSource.FatSecret, WeightKg = 75m, WeightSource = LogSource.User });
+        await db.SaveChangesAsync();
+
+        var exported = await service.ExportAsync();
+        await service.ImportAsync(exported with { DailyLogs = [.. exported.DailyLogs, new DailyLogDto(0, "2024-01-10", null, 2000, null, false, ts, ts)] });
+
+        var logs = await db.DailyLogs.OrderBy(l => l.Date).ToListAsync();
+        Assert.Equal((LogSource.FatSecret, LogSource.User), (logs[0].CaloriesSource, logs[0].WeightSource));
+        Assert.Equal((LogSource.User, (LogSource?)null), (logs[1].CaloriesSource, logs[1].WeightSource));
+    }
 }

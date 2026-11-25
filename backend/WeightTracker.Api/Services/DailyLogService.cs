@@ -50,7 +50,13 @@ public class DailyLogService(AppDbContext db) : IDailyLogService
 
         // CaloriesSetOn follows the value only: saving a weight or a note leaves it alone.
         if (log.CaloriesKcal != dto.CaloriesKcal)
+        {
             log.CaloriesSetOn = dto.CaloriesKcal is null ? null : today;
+            log.CaloriesSource = dto.CaloriesKcal is null ? null : LogSource.User;
+        }
+        // The same goes for who wrote it: adding a weigh-in or a note must not protect an imported calorie value.
+        if (log.WeightKg != weight)
+            log.WeightSource = weight is null ? null : LogSource.User;
 
         log.WeightKg = weight;
         log.CaloriesKcal = dto.CaloriesKcal;
@@ -71,36 +77,39 @@ public class DailyLogService(AppDbContext db) : IDailyLogService
         return true;
     }
 
-    public async Task<DailyLogDto> SetCaloriesAsync(DateOnly date, int kcal, DateOnly today)
+    public async Task WriteFieldsAsync(IReadOnlyCollection<LogWrite> writes, DateOnly today)
     {
-        var log = await GetOrAddAsync(date);
-        if (log.CaloriesKcal != kcal) log.CaloriesSetOn = today;
-        log.CaloriesKcal = kcal;
-        log.UpdatedAt = DateTimeOffset.UtcNow;
-        await db.SaveChangesAsync();
-        return ToDto(log);
-    }
+        if (writes.Count == 0) return;
 
-    public async Task<DailyLogDto> SetWeightAsync(DateOnly date, decimal kg)
-    {
-        var log = await GetOrAddAsync(date);
-        log.WeightKg = Math.Round(kg, 2);
-        log.UpdatedAt = DateTimeOffset.UtcNow;
-        await db.SaveChangesAsync();
-        return ToDto(log);
-    }
+        var dates = writes.Select(w => w.Date).Distinct().ToList();
+        var logs = await db.DailyLogs.Where(l => dates.Contains(l.Date)).ToDictionaryAsync(l => l.Date);
 
-    private async Task<DailyLog> GetOrAddAsync(DateOnly date)
-    {
-        var log = await db.DailyLogs.FirstOrDefaultAsync(l => l.Date == date);
-        if (log is null)
+        foreach (var write in writes)
         {
-            log = new DailyLog { Date = date };
-            db.DailyLogs.Add(log);
+            if (!logs.TryGetValue(write.Date, out var log))
+            {
+                log = new DailyLog { Date = write.Date };
+                db.DailyLogs.Add(log);
+                logs[write.Date] = log;
+            }
+
+            if (write.Field == LogField.Calories)
+            {
+                log.CaloriesKcal = (int)Math.Round(write.Value, MidpointRounding.AwayFromZero);
+                log.CaloriesSetOn = today;
+                log.CaloriesSource = write.Source;
+            }
+            else
+            {
+                log.WeightKg = Math.Round(write.Value, 2);
+                log.WeightSource = write.Source;
+            }
+            log.UpdatedAt = DateTimeOffset.UtcNow;
         }
-        return log;
+
+        await db.SaveChangesAsync();
     }
 
     private static DailyLogDto ToDto(DailyLog l) =>
-        new(l.Id, l.Date.ToString("yyyy-MM-dd"), l.WeightKg, l.CaloriesKcal, l.Notes, l.IsCheatDay, l.CreatedAt, l.UpdatedAt, l.CaloriesSetOn);
+        new(l.Id, l.Date.ToString("yyyy-MM-dd"), l.WeightKg, l.CaloriesKcal, l.Notes, l.IsCheatDay, l.CreatedAt, l.UpdatedAt, l.CaloriesSetOn, l.CaloriesSource, l.WeightSource);
 }

@@ -10,12 +10,24 @@ public class AppDbContext(DbContextOptions options) : DbContext(options)
     public DbSet<CalorieGoal> CalorieGoals => Set<CalorieGoal>();
     public DbSet<TdeeEntry> TdeeEntries => Set<TdeeEntry>();
     public DbSet<UserSettings> UserSettings => Set<UserSettings>();
+    public DbSet<IntegrationConnection> IntegrationConnections => Set<IntegrationConnection>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<DailyLog>()
-            .HasIndex(e => e.Date)
-            .IsUnique();
+        modelBuilder.Entity<DailyLog>(e =>
+        {
+            e.HasIndex(l => l.Date).IsUnique();
+            e.Property(l => l.CaloriesSource).HasConversion<string>().HasMaxLength(16);
+            e.Property(l => l.WeightSource).HasConversion<string>().HasMaxLength(16);
+        });
+
+        modelBuilder.Entity<IntegrationConnection>(e =>
+        {
+            e.HasIndex(c => c.Provider).IsUnique();
+            e.Property(c => c.Provider).HasMaxLength(32);
+            e.Property(c => c.Status).HasConversion<string>().HasMaxLength(16);
+            e.Property(c => c.LastSyncStatus).HasConversion<string>().HasMaxLength(16);
+        });
 
         modelBuilder.Entity<Goal>()
             .HasIndex(e => e.CreatedAt);

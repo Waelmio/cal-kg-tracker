@@ -73,6 +73,8 @@ Thumbs.db
 *.db-wal
 .claude
 data/*
+# Keys that encrypt integration tokens (local development)
+backend/WeightTracker.Api/keys/
 # FatSecret test token
 scripts/.fatsecret-token.json
 

@@ -19,7 +19,7 @@ public class DataService(AppDbContext db) : IDataService
 
         return new ExportImportDto(
             new ExportSettingsDto(settings.HeightCm, settings.PreferredUnit, settings.AveragingWeeks),
-            logs.Select(l => new DailyLogDto(0, l.Date.ToString("yyyy-MM-dd"), l.WeightKg, l.CaloriesKcal, l.Notes, l.IsCheatDay, l.CreatedAt, l.UpdatedAt, l.CaloriesSetOn)).ToList(),
+            logs.Select(l => new DailyLogDto(0, l.Date.ToString("yyyy-MM-dd"), l.WeightKg, l.CaloriesKcal, l.Notes, l.IsCheatDay, l.CreatedAt, l.UpdatedAt, l.CaloriesSetOn, l.CaloriesSource, l.WeightSource)).ToList(),
             goals.Select(g => new GoalDto(0, g.TargetWeightKg, g.TargetDate, g.StartingWeightKg, g.StartDate, g.Notes, g.CreatedAt, g.Kind, g.EndedOn, g.EndReason)).ToList(),
             calorieGoals.Select(g => new CalorieGoalDto(0, g.TargetCalories, g.CreatedAt, g.EffectiveFrom)).ToList(),
             CurrentVersion,
@@ -33,6 +33,8 @@ public class DataService(AppDbContext db) : IDataService
         db.Goals.RemoveRange(await db.Goals.ToListAsync());
         db.CalorieGoals.RemoveRange(await db.CalorieGoals.ToListAsync());
         db.TdeeEntries.RemoveRange(await db.TdeeEntries.ToListAsync());
+        // Disconnected too, or the next automatic sync would fill the cleared days again.
+        db.IntegrationConnections.RemoveRange(await db.IntegrationConnections.ToListAsync());
 
         // The settings row always exists (Id = 1); reset it rather than delete it.
         var s = await db.UserSettings.FindAsync(1);
@@ -65,6 +67,9 @@ public class DataService(AppDbContext db) : IDataService
                 WeightKg = log.WeightKg,
                 CaloriesKcal = calories,
                 CaloriesSetOn = setOn,
+                // Exports from before the integrations don't say: those values were the user's.
+                CaloriesSource = calories is null ? null : log.CaloriesSource ?? LogSource.User,
+                WeightSource = log.WeightKg is null ? null : log.WeightSource ?? LogSource.User,
                 Notes = log.Notes,
                 IsCheatDay = log.IsCheatDay,
                 CreatedAt = log.CreatedAt,

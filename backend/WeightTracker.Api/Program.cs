@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using WeightTracker.Api.Data;
+using WeightTracker.Api.Integrations;
 using WeightTracker.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -13,6 +14,7 @@ var databaseUrl = builder.Configuration["DATABASE_URL"];
 var pgHost = builder.Configuration["POSTGRES_HOST"];
 
 var isPostgres = !string.IsNullOrEmpty(databaseUrl) || !string.IsNullOrEmpty(pgHost);
+var sqlitePath = builder.Configuration["SQL_DB_PATH"] ?? "weighttracker.db";
 
 if (isPostgres)
 {
@@ -34,8 +36,7 @@ else
 {
     builder.Services.AddDbContext<SqliteDbContext>(options =>
     {
-        var dbPath = builder.Configuration["SQL_DB_PATH"] ?? "weighttracker.db";
-        options.UseSqlite($"Data Source={dbPath}");
+        options.UseSqlite($"Data Source={sqlitePath}");
     });
     builder.Services.AddScoped<AppDbContext>(sp => sp.GetRequiredService<SqliteDbContext>());
 }
@@ -47,6 +48,12 @@ builder.Services.AddScoped<ISettingsService, SettingsService>();
 builder.Services.AddScoped<IDataService, DataService>();
 builder.Services.AddScoped<ITdeeEntryService, TdeeEntryService>();
 builder.Services.AddScoped<WeightTracker.Api.Stats.IStatsService, WeightTracker.Api.Stats.StatsService>();
+
+// The keys that encrypt integration tokens live next to the SQLite database, so one volume keeps both.
+var keysPath = builder.Configuration["DATA_PROTECTION_KEYS_PATH"] is { Length: > 0 } path
+    ? path
+    : Path.Combine(isPostgres ? builder.Environment.ContentRootPath : Path.GetDirectoryName(Path.GetFullPath(sqlitePath))!, "keys");
+builder.Services.AddIntegrations(builder.Configuration, keysPath);
 
 var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? [];
 builder.Services.AddCors(options =>

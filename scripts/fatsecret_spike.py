@@ -11,12 +11,18 @@ Usage:
     python3 scripts/fatsecret_spike.py --months 6 # fetch more months
     python3 scripts/fatsecret_spike.py --raw      # also print raw JSON responses
 
+Every day of a period, printed and saved as CSV (git-ignored data/ folder by default):
+    python3 scripts/fatsecret_spike.py --year                             # the last 12 months, today included
+    python3 scripts/fatsecret_spike.py --from 2025-01-01 --to 2025-12-31  # any period
+    python3 scripts/fatsecret_spike.py --year --csv ~/fatsecret.csv       # choose the file
+
 Only the Python standard library is used. The access token/secret are saved to
 scripts/.fatsecret-token.json (git-ignored, chmod 600). The consumer key/secret
 are only read from the environment and never written anywhere.
 """
 import argparse
 import base64
+import csv
 import datetime as dt
 import hashlib
 import hmac
@@ -31,7 +37,9 @@ import urllib.request
 
 AUTH_BASE = "https://authentication.fatsecret.com/oauth"
 API_BASE = "https://platform.fatsecret.com/rest"
-TOKEN_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".fatsecret-token.json")
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+TOKEN_FILE = os.path.join(SCRIPT_DIR, ".fatsecret-token.json")
+DATA_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "data")
 EPOCH = dt.date(1970, 1, 1)
 
 
@@ -181,6 +189,74 @@ def explain_error(err):
     return hints.get(code, "")
 
 
+def one_year_before(d):
+    try:
+        return d.replace(year=d.year - 1)
+    except ValueError:  # 29 February
+        return d.replace(year=d.year - 1, day=28)
+
+
+def months_between(start, end):
+    """First day of every month the period touches, oldest first."""
+    d = start.replace(day=1)
+    out = []
+    while d <= end:
+        out.append(d)
+        d = (d + dt.timedelta(days=31)).replace(day=1)
+    return out
+
+
+def number(value, decimals):
+    """FatSecret sends numbers as strings. Whole kcal, kg with up to 2 decimals."""
+    n = round(float(value), decimals)
+    return int(n) if n == int(n) and decimals == 0 else n
+
+
+def fetch_period(start, end, key, secret, tok, raw):
+    """{date: {"calories": kcal or None, "weight_kg": kg or None}} for every day of the period, and the call count."""
+    days = {start + dt.timedelta(days=i): {"calories": None, "weight_kg": None} for i in range((end - start).days + 1)}
+    calls = 0
+    for ms in months_between(start, end):
+        print(f"  fetching {ms:%Y-%m}...", file=sys.stderr)
+        for path, field, decimals in (("food-entries/month/v2", "calories", 0), ("weight/month/v2", "weight_kg", 2)):
+            status, entries, err = fetch_month(path, ms, key, secret, tok, raw)
+            calls += 1
+            if entries is None:
+                # Never save a period with holes in it: a missing month would look like days without a log.
+                hint = explain_error(err)
+                sys.exit(f"{path} for {ms:%Y-%m} failed, nothing was saved: HTTP {status}: {err}" + (f"\n  -> {hint}" if hint else ""))
+            for e in entries:
+                date = EPOCH + dt.timedelta(days=int(e["date_int"]))
+                if date in days and e.get(field) not in (None, ""):
+                    days[date][field] = number(e[field], decimals)
+    return days, calls
+
+
+def export_period(start, end, csv_path, key, secret, tok, raw):
+    days, calls = fetch_period(start, end, key, secret, tok, raw)
+
+    print("date        calories  weight_kg")
+    for date, d in days.items():
+        kcal = "" if d["calories"] is None else d["calories"]
+        kg = "" if d["weight_kg"] is None else f"{d['weight_kg']:.2f}"
+        print(f"{date}  {kcal:>8}  {kg:>9}")
+
+    os.makedirs(os.path.dirname(os.path.abspath(csv_path)), exist_ok=True)
+    with open(csv_path, "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["date", "calories_kcal", "weight_kg"])
+        for date, d in days.items():
+            w.writerow([date.isoformat(), "" if d["calories"] is None else d["calories"],
+                        "" if d["weight_kg"] is None else d["weight_kg"]])
+
+    kcals = [d["calories"] for d in days.values() if d["calories"] is not None]
+    kgs = [d["weight_kg"] for d in days.values() if d["weight_kg"] is not None]
+    print(f"\n{start} to {end}: {len(days)} days")
+    print(f"  calories: {len(kcals)} day(s)" + (f", average {sum(kcals) / len(kcals):.0f} kcal" if kcals else ""))
+    print(f"  weight:   {len(kgs)} day(s)" + (f", {kgs[0]:.2f} -> {kgs[-1]:.2f} kg" if kgs else ""))
+    print(f"Saved to {os.path.abspath(csv_path)} ({calls} API calls)")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--reauth", action="store_true")
@@ -188,7 +264,23 @@ def main():
     ap.add_argument("--raw", action="store_true")
     ap.add_argument("--callback", nargs="?", const=8765, type=int, metavar="PORT",
                     help="use a local http://localhost:PORT/callback redirect instead of the PIN (default port 8765)")
+    ap.add_argument("--year", action="store_true", help="every day of the last 12 months, printed and saved as CSV")
+    ap.add_argument("--from", dest="start", type=dt.date.fromisoformat, metavar="YYYY-MM-DD", help="start of a period")
+    ap.add_argument("--to", dest="end", type=dt.date.fromisoformat, metavar="YYYY-MM-DD", help="end of a period (default today)")
+    ap.add_argument("--csv", metavar="FILE", help="where to save the period (default data/fatsecret-FROM_TO.csv)")
     args = ap.parse_args()
+
+    today = dt.date.today()
+    if args.year and (args.start or args.end):
+        ap.error("--year already sets the period; use --from/--to alone for another one")
+    if args.end and not args.start:
+        ap.error("--to needs --from")
+    start = one_year_before(today) if args.year else args.start
+    end = min(args.end or today, today)
+    if args.csv and not start:
+        ap.error("--csv needs --year or --from")
+    if start and start > end:
+        ap.error("--from is after --to (or in the future)")
 
     key = os.environ.get("FATSECRET_CONSUMER_KEY", "").strip().strip("'\"")
     secret = os.environ.get("FATSECRET_CONSUMER_SECRET", "").strip().strip("'\"")
@@ -200,6 +292,11 @@ def main():
         print(f"Using saved access token ({TOKEN_FILE}); use --reauth to log in again.\n")
     else:
         tok = authenticate(key, secret, args.callback)
+
+    if start:
+        csv_path = os.path.expanduser(args.csv) if args.csv else os.path.join(DATA_DIR, f"fatsecret-{start}_{end}.csv")
+        export_period(start, end, csv_path, key, secret, tok, args.raw)
+        return
 
     calls = 0
     for ms in month_starts(args.months):

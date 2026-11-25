@@ -1,6 +1,13 @@
 using WeightTracker.Api.DTOs;
+using WeightTracker.Api.Models;
 
 namespace WeightTracker.Api.Services;
+
+[System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
+public enum LogField { Calories, Weight }
+
+/// <summary>One field of one day, and who the value comes from.</summary>
+public record LogWrite(DateOnly Date, LogField Field, decimal Value, LogSource Source);
 
 public interface IDailyLogService
 {
@@ -17,8 +24,9 @@ public interface IDailyLogService
     Task<bool> DeleteDayAsync(DateOnly date);
 
     /// <summary>
-    /// Single-field write for imports: sets only the calories (or only the weight) of a day and leaves everything else alone.
+    /// Single-field writes for imports, all or nothing: each sets only the calories (or only the weight) of a day and
+    /// leaves everything else alone. Calories count as set on <paramref name="today"/>, also when the value is the same
+    /// (choosing to keep a value is setting it).
     /// </summary>
-    Task<DailyLogDto> SetCaloriesAsync(DateOnly date, int kcal, DateOnly today);
-    Task<DailyLogDto> SetWeightAsync(DateOnly date, decimal kg);
+    Task WriteFieldsAsync(IReadOnlyCollection<LogWrite> writes, DateOnly today);
 }

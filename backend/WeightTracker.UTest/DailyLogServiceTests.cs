@@ -174,46 +174,73 @@ public class DailyLogServiceTests
         Assert.False(await svc.DeleteDayAsync(new DateOnly(2024, 3, 1)));
     }
 
+    // ── Sources ───────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Upsert_SetsTheSourceOnlyOfTheValueThatChanged()
+    {
+        using var db = CreateDb();
+        var svc = CreateService(db);
+        var day = new DateOnly(2026, 11, 20);
+        await svc.WriteFieldsAsync([new(day, LogField.Calories, 1750, LogSource.FatSecret), new(day, LogField.Weight, 80m, LogSource.FatSecret)], Today);
+
+        var saved = await svc.UpsertAsync(Put("2026-11-20", 80m, 1750, "a note"), Today);
+        Assert.Equal((LogSource.FatSecret, LogSource.FatSecret), (saved!.CaloriesSource, saved.WeightSource));
+
+        saved = await svc.UpsertAsync(Put("2026-11-20", 80.5m, 1750), Today);
+        Assert.Equal((LogSource.FatSecret, LogSource.User), (saved!.CaloriesSource, saved.WeightSource));
+
+        saved = await svc.UpsertAsync(Put("2026-11-20", null, 1800), Today);
+        Assert.Equal((LogSource.User, (LogSource?)null), (saved!.CaloriesSource, saved.WeightSource));
+    }
+
     // ── Single-field writes (for imports) ─────────────────────────────────────
 
     [Fact]
-    public async Task SetCalories_TouchesOnlyCalories()
+    public async Task WriteFields_TouchOnlyTheirField()
     {
         using var db = CreateDb();
         var svc = CreateService(db);
         await svc.UpsertAsync(Put("2026-11-20", 80m, null, "note", cheat: true), Today);
+        await svc.UpsertAsync(Put("2026-11-21", null, 1800), Today);
 
-        var saved = await svc.SetCaloriesAsync(new DateOnly(2026, 11, 20), 1750, Today);
+        await svc.WriteFieldsAsync(
+            [new(new DateOnly(2026, 11, 20), LogField.Calories, 1750, LogSource.FatSecret), new(new DateOnly(2026, 11, 21), LogField.Weight, 81.234m, LogSource.FatSecret)],
+            Today);
 
+        var saved = (await svc.GetByDateAsync(new DateOnly(2026, 11, 20)))!;
         Assert.Equal(1750, saved.CaloriesKcal);
+        Assert.Equal(Today, saved.CaloriesSetOn);
+        Assert.Equal(LogSource.FatSecret, saved.CaloriesSource);
         Assert.Equal(80m, saved.WeightKg);
+        Assert.Equal(LogSource.User, saved.WeightSource);
         Assert.Equal("note", saved.Notes);
         Assert.True(saved.IsCheatDay);
-        Assert.Equal(Today, saved.CaloriesSetOn);
+
+        var other = (await svc.GetByDateAsync(new DateOnly(2026, 11, 21)))!;
+        Assert.Equal(81.23m, other.WeightKg);
+        Assert.Equal(1800, other.CaloriesKcal);
+        Assert.Equal(LogSource.User, other.CaloriesSource);
     }
 
     [Fact]
-    public async Task SetCalories_CreatesTheRow_AndKeepsSetOnWhenTheValueIsUnchanged()
+    public async Task WriteFields_CreateOneRowForBothFieldsOfADay()
     {
         using var db = CreateDb();
         var svc = CreateService(db);
-        var first = await svc.SetCaloriesAsync(new DateOnly(2026, 11, 20), 1750, Today);
-        var again = await svc.SetCaloriesAsync(new DateOnly(2026, 11, 20), 1750, Today.AddDays(1));
-        Assert.Equal(first.CaloriesSetOn, again.CaloriesSetOn);
-        Assert.Equal(1, await db.DailyLogs.CountAsync());
+        var day = new DateOnly(2026, 11, 20);
+        await svc.WriteFieldsAsync([new(day, LogField.Calories, 0, LogSource.FatSecret), new(day, LogField.Weight, 80m, LogSource.FatSecret)], Today);
+
+        var log = await db.DailyLogs.SingleAsync();
+        Assert.Equal((0, 80m), (log.CaloriesKcal, log.WeightKg));
     }
 
     [Fact]
-    public async Task SetWeight_TouchesOnlyWeight()
+    public async Task WriteFields_WithNothingToWrite_DoesNothing()
     {
         using var db = CreateDb();
-        var svc = CreateService(db);
-        await svc.UpsertAsync(Put("2026-11-20", kcal: 1800), Today);
-
-        var saved = await svc.SetWeightAsync(new DateOnly(2026, 11, 20), 81.234m);
-
-        Assert.Equal(81.23m, saved.WeightKg);
-        Assert.Equal(1800, saved.CaloriesKcal);
+        await CreateService(db).WriteFieldsAsync([], Today);
+        Assert.Empty(await db.DailyLogs.ToListAsync());
     }
 
     [Fact]

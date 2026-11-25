@@ -62,6 +62,11 @@ public abstract class MigrationTestsBase
         Assert.Equal(1850, logs[5].CaloriesKcal);
         Assert.Equal("felt hungry", logs[5].Notes);
 
+        // Everything stored before the integrations was the user's.
+        Assert.All(logs, l => Assert.Equal(LogSource.User, l.CaloriesSource));
+        Assert.Equal(LogSource.User, logs[4].WeightSource);
+        Assert.All(logs.Where(l => l.WeightKg is null), l => Assert.Null(l.WeightSource));
+
         var targets = await db.CalorieGoals.OrderBy(g => g.EffectiveFrom).ToListAsync();
         Assert.Equal(new DateOnly(2026, 6, 1), targets[0].EffectiveFrom);
         Assert.Equal(new DateOnly(2026, 10, 15), targets[1].EffectiveFrom);

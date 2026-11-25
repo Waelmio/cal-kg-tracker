@@ -8,6 +8,7 @@ public static class DbFixture
         db.Goals.RemoveRange(db.Goals);
         db.CalorieGoals.RemoveRange(db.CalorieGoals);
         db.TdeeEntries.RemoveRange(db.TdeeEntries);
+        db.IntegrationConnections.RemoveRange(db.IntegrationConnections);
 
         // UserSettings row Id=1 must always exist (seeded by migration HasData).
         // Reset it to defaults rather than deleting.

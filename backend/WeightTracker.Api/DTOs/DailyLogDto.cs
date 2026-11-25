@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using WeightTracker.Api.Models;
 
 namespace WeightTracker.Api.DTOs;
 
@@ -11,7 +12,9 @@ public record DailyLogDto(
     bool IsCheatDay,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
-    DateOnly? CaloriesSetOn = null);
+    DateOnly? CaloriesSetOn = null,
+    LogSource? CaloriesSource = null,
+    LogSource? WeightSource = null);
 
 /// <summary>
 /// Full replace of a day: a null field clears it, 0 kcal is kept (a fasting day), cheat day and note included.

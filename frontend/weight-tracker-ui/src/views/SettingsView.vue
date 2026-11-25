@@ -30,6 +30,8 @@
         <div class="muted small">Height is used for BMI. TDEE and targets are in Goals. Weights are stored in kg; the unit only changes how they are shown.</div>
       </section>
 
+      <IntegrationsSection class="ruled" />
+
       <section class="sec ruled">
         <h2>Data</h2>
         <div class="units">
@@ -55,7 +57,7 @@
       <p v-if="saveError" role="alert" class="error">{{ saveError }}</p>
       <p v-if="saved" role="status" class="ok">Saved.</p>
       <Modal v-if="confirmClear" title="Delete all your data?" max-width="440px" @close="confirmClear = false">
-        <p class="dlg">This permanently deletes every log, weight goal, calorie target and TDEE entry, and resets your settings. It can't be undone.</p>
+        <p class="dlg">This permanently deletes every log, weight goal, calorie target and TDEE entry, resets your settings and disconnects your integrations. It can't be undone.</p>
         <p class="dlg">Export first if you want a copy.</p>
         <template #footer>
           <div class="dlg-row">
@@ -73,6 +75,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import Modal from '../components/ui/Modal.vue'
+import IntegrationsSection from '../components/settings/IntegrationsSection.vue'
 import { useAppStore } from '../stores/app'
 import { clearData, exportData, importData } from '../api/data'
 import * as statsApi from '../api/stats'

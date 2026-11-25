@@ -18,6 +18,7 @@ public class SqliteWebAppFactory : WebApplicationFactory<Program>, IAsyncLifetim
         builder.UseSetting("SQL_DB_PATH", _dbPath);
         builder.UseSetting("DATABASE_URL", "");
         builder.UseSetting("POSTGRES_HOST", "");
+        builder.UseIntegrationTestSettings();
     }
 
     async Task IAsyncLifetime.DisposeAsync()

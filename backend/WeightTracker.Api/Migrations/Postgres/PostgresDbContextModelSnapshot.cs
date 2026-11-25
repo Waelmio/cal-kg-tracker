@@ -60,6 +60,10 @@ namespace WeightTracker.Api.Migrations.Postgres
                     b.Property<DateOnly?>("CaloriesSetOn")
                         .HasColumnType("date");
 
+                    b.Property<string>("CaloriesSource")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -77,6 +81,10 @@ namespace WeightTracker.Api.Migrations.Postgres
 
                     b.Property<decimal?>("WeightKg")
                         .HasColumnType("numeric");
+
+                    b.Property<string>("WeightSource")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
 
                     b.HasKey("Id");
 
@@ -131,6 +139,53 @@ namespace WeightTracker.Api.Migrations.Postgres
                     b.HasIndex("CreatedAt");
 
                     b.ToTable("Goals");
+                });
+
+            modelBuilder.Entity("WeightTracker.Api.Models.IntegrationConnection", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AccessToken")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("AccessTokenSecret")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("ConnectedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastError")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("LastSyncAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastSyncStatus")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Provider")
+                        .IsUnique();
+
+                    b.ToTable("IntegrationConnections");
                 });
 
             modelBuilder.Entity("WeightTracker.Api.Models.TdeeEntry", b =>

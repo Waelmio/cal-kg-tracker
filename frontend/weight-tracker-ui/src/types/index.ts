@@ -12,7 +12,12 @@ export interface DailyLog {
   createdAt: string
   updatedAt: string
   caloriesSetOn: string | null
+  caloriesSource: LogSource | null
+  weightSource: LogSource | null
 }
+
+/** Who wrote a value. */
+export type LogSource = 'User' | 'FatSecret'
 
 /** Body of PUT /daily-logs/{date}: a full replace of the day. */
 export interface SaveDayRequest {
@@ -262,4 +267,74 @@ export interface MonthSummary {
   endWeightKg: number | null
   weeks: CalendarWeek[]
   tdee: TdeeEstimate | null
+}
+
+// ── Integrations ──────────────────────────────────────────────────────────
+
+export interface Integration {
+  id: string
+  name: string
+  configured: boolean
+  /** Environment variables to set when it is not configured. */
+  requiredSettings: string[]
+  attribution: { text: string; url: string } | null
+  /** Null: not connected. */
+  status: 'Connected' | 'NeedsReconnect' | null
+  connectedAt: string | null
+  lastSyncAt: string | null
+  lastSyncStatus: 'Succeeded' | 'Failed' | null
+  lastError: string | null
+}
+
+export interface FieldSyncResult {
+  written: number
+  unchanged: number
+  /** Different, but logged by the user: left alone. */
+  kept: number
+}
+
+export interface SyncResult {
+  from: string
+  to: string
+  calories: FieldSyncResult
+  weight: FieldSyncResult
+}
+
+export type SyncField = 'Calories' | 'Weight'
+export type SyncChoice = 'Keep' | 'Replace'
+
+/** One value where the app and the provider differ. */
+export interface SyncRow {
+  date: string
+  field: SyncField
+  kind: 'New' | 'Conflict'
+  appValue: number | null
+  value: number
+  setInAdvance: boolean
+  /** The app's value came from an earlier sync. */
+  imported: boolean
+  suggested: SyncChoice
+}
+
+export interface SyncPreview {
+  previewId: string
+  from: string
+  to: string
+  rows: SyncRow[]
+  equalCount: number
+  missingCount: number
+}
+
+export interface SyncDecision {
+  date: string
+  field: SyncField
+  choice: SyncChoice
+}
+
+export interface SyncApplyResult {
+  added: number
+  replaced: number
+  kept: number
+  /** Skipped: the day changed after the comparison. */
+  changed: number
 }

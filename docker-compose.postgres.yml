@@ -9,6 +9,13 @@ services:
       - POSTGRES_DB=weighttracker
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
+      - DATA_PROTECTION_KEYS_PATH=/keys
+      - FATSECRET_CONSUMER_KEY=${FATSECRET_CONSUMER_KEY:-}
+      - FATSECRET_CONSUMER_SECRET=${FATSECRET_CONSUMER_SECRET:-}
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-}
+      - TZ=${TZ:-UTC}
+    volumes:
+      - app_keys:/keys
     depends_on:
       db:
         condition: service_healthy
@@ -28,4 +35,5 @@ services:
       retries: 5
 
 volumes:
+  app_keys:
   postgres_data:

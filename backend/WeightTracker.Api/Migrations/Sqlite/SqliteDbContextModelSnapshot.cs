@@ -52,6 +52,10 @@ namespace WeightTracker.Api.Migrations.Sqlite
                     b.Property<DateOnly?>("CaloriesSetOn")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("CaloriesSource")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("CreatedAt")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -70,6 +74,10 @@ namespace WeightTracker.Api.Migrations.Sqlite
                         .HasColumnType("TEXT");
 
                     b.Property<decimal?>("WeightKg")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WeightSource")
+                        .HasMaxLength(16)
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -124,6 +132,52 @@ namespace WeightTracker.Api.Migrations.Sqlite
                     b.HasIndex("CreatedAt");
 
                     b.ToTable("Goals");
+                });
+
+            modelBuilder.Entity("WeightTracker.Api.Models.IntegrationConnection", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AccessToken")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AccessTokenSecret")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ConnectedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastError")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastSyncAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastSyncStatus")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Provider")
+                        .IsUnique();
+
+                    b.ToTable("IntegrationConnections");
                 });
 
             modelBuilder.Entity("WeightTracker.Api.Models.TdeeEntry", b =>

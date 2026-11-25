@@ -19,6 +19,7 @@ public class PostgresWebAppFactory : WebApplicationFactory<Program>, IAsyncLifet
     {
         builder.UseSetting("DATABASE_URL", _container.GetConnectionString());
         builder.UseSetting("POSTGRES_HOST", "");
+        builder.UseIntegrationTestSettings();
     }
 
     async Task IAsyncLifetime.DisposeAsync()
